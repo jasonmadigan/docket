@@ -1,6 +1,6 @@
 Mine (2)
   pass      5w  acme/widgets#51  Add rate limit docs
-                author · ready to merge · 1 reply since yours
+                author · ready to merge
   fail      2d  acme/widgets#42  Fix reconcile loop when the gateway disappears
                 author · CI failing: e2e · changes requested by carol · 2 unresolved threads · 1 reply since yours
 

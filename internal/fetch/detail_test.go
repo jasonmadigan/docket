@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,5 +71,11 @@ func TestDetailBecomesModel(t *testing.T) {
 	}
 	if got := res.PRs[0]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got  %+v\nwant %+v", got, want)
+	}
+}
+
+func TestMyReviewSkipsPendingDrafts(t *testing.T) {
+	if !strings.Contains(detailQuery, "reviews(last: 1, author: $login, states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED])") {
+		t.Fatal("myReviews can return a pending draft, which hides the submitted review")
 	}
 }

@@ -56,7 +56,7 @@ const detailQuery = `query($ids: [ID!]!, $login: String!) {
       headRefOid mergeable mergeStateStatus reviewDecision
       reviewRequests(first: 20) { nodes { requestedReviewer { ` + reviewerFields + ` } } }
       latestOpinionatedReviews(first: 20) { nodes { author { __typename login } state submittedAt commit { oid } } }
-      myReviews: reviews(last: 1, author: $login) { nodes { author { __typename login } state submittedAt commit { oid } } }
+      myReviews: reviews(last: 1, author: $login, states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]) { nodes { author { __typename login } state submittedAt commit { oid } } }
       reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { isResolved } }
       commits(last: 100) { totalCount nodes { commit { oid committedDate author { name user { login } } } } }
       head: commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) {

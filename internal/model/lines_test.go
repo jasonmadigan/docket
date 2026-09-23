@@ -35,6 +35,9 @@ func TestWhatsLeft(t *testing.T) {
 		{"needs more approvals", PR{Checks: green, ReviewDecision: "REVIEW_REQUIRED", Opinions: []Review{
 			{Author: user("carol"), State: "APPROVED"}}},
 			[]Line{{Kind: Wait, Text: "needs more approvals"}}},
+		{"changes requested by a deleted account", PR{Checks: green, ReviewDecision: "CHANGES_REQUESTED",
+			Opinions: []Review{{State: "CHANGES_REQUESTED"}}},
+			[]Line{{Kind: Bad, Text: "changes requested by ghost"}}},
 		{"no reviewer", PR{Checks: green, ReviewDecision: "REVIEW_REQUIRED"},
 			[]Line{{Kind: Bad, Text: "no reviewer"}}},
 		{"one thread", PR{Checks: green, UnresolvedThreads: 1},
@@ -129,8 +132,21 @@ func TestMySide(t *testing.T) {
 		}, []Line{{Kind: Wait, Text: "2 replies since yours"}}},
 		{"replies on my PR", PR{
 			Author: user("me"), CreatedAt: at(0),
-			Timeline: []Event{{Kind: EventReview, Actor: user("bob"), At: at(5), State: "APPROVED"}},
+			Timeline: []Event{{Kind: EventReview, Actor: user("bob"), At: at(5), State: "CHANGES_REQUESTED"}},
 		}, []Line{{Kind: Wait, Text: "1 reply since yours"}}},
+		{"an approval is not a reply", PR{
+			Author: user("me"), CreatedAt: at(0),
+			Timeline: []Event{
+				{Kind: EventReview, Actor: user("bob"), At: at(5), State: "APPROVED"},
+				{Kind: EventReview, Actor: user("carol"), At: at(6), State: "DISMISSED"},
+			},
+		}, nil},
+		{"my own PR shows no review lines", PR{
+			Author: user("me"), CreatedAt: at(0), HeadOID: "c2", CommitCount: 2,
+			Commits:  []Commit{{OID: "c1"}, {OID: "c2"}},
+			Requests: []Reviewer{{Name: "acme/devs", Team: true}},
+			MyReview: &Review{State: "COMMENTED", At: at(1), Commit: "c1"},
+		}, nil},
 		{"replies beyond the window", PR{
 			Author: user("alice"), CreatedAt: at(0), Tags: []Tag{TagCommented}, TimelineTruncated: true,
 			Timeline: []Event{{Kind: EventComment, Actor: user("bob"), At: at(20)}},

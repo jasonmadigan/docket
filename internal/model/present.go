@@ -18,7 +18,7 @@ func Reviewers(pr PR) []ReviewerState {
 		out = append(out, ReviewerState{Name: r.Name, State: "review requested"})
 	}
 	for _, r := range pr.Opinions {
-		out = append(out, ReviewerState{Name: r.Author.Login, State: verb(r.State)})
+		out = append(out, ReviewerState{Name: displayName(r.Author), State: verb(r.State)})
 	}
 	return out
 }

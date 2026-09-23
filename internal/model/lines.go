@@ -100,13 +100,21 @@ func changesRequested(opinions []Review) string {
 	var who []string
 	for _, r := range opinions {
 		if r.State == "CHANGES_REQUESTED" {
-			who = append(who, r.Author.Login)
+			who = append(who, displayName(r.Author))
 		}
 	}
 	if len(who) == 0 {
 		return "changes requested"
 	}
 	return "changes requested by " + strings.Join(who, ", ")
+}
+
+// displayName calls deleted accounts ghost, as github does.
+func displayName(a Actor) string {
+	if a.Login == "" {
+		return "ghost"
+	}
+	return a.Login
 }
 
 func names(rs []Reviewer) string {
@@ -136,16 +144,18 @@ func mySide(pr PR, p people, teams map[string]bool, now time.Time) []Line {
 	add := func(kind LineKind, text string) {
 		lines = append(lines, Line{Kind: kind, Text: text})
 	}
-	for _, r := range pr.Requests {
-		switch {
-		case !r.Team && p.isMe(Actor{Login: r.Name}):
-			add(Wait, "review requested"+ago(requestedAt(pr, r.Name), now))
-		case r.Team && teams[strings.ToLower(r.Name)]:
-			add(Wait, "review requested from "+r.Name+ago(requestedAt(pr, r.Name), now))
+	if !p.isMe(pr.Author) {
+		for _, r := range pr.Requests {
+			switch {
+			case !r.Team && p.isMe(Actor{Login: r.Name}):
+				add(Wait, "review requested"+ago(requestedAt(pr, r.Name), now))
+			case r.Team && teams[strings.ToLower(r.Name)]:
+				add(Wait, "review requested from "+r.Name+ago(requestedAt(pr, r.Name), now))
+			}
 		}
-	}
-	if pr.MyReview != nil {
-		add(myReview(pr, now))
+		if pr.MyReview != nil {
+			add(myReview(pr, now))
+		}
 	}
 	if at, ok := unansweredMention(pr, p); ok {
 		text := "mentioned"
@@ -245,29 +255,32 @@ func mentioner(pr PR, p people, at time.Time) string {
 }
 
 // replies counts people's comments and reviews since my last one, or since
-// I opened the pr. When my last word is older than the timeline window the
-// count is a floor.
+// I opened the pr. Approvals and dismissals aren't replies. When my last word
+// is older than the timeline window the count is a floor.
 func replies(pr PR, p people) string {
-	said := func(e Event) bool { return e.Kind == EventComment || e.Kind == EventReview }
+	spoke := func(e Event) bool { return e.Kind == EventComment || e.Kind == EventReview }
+	replied := func(e Event) bool {
+		return e.Kind == EventComment || (e.Kind == EventReview && e.State != "APPROVED" && e.State != "DISMISSED")
+	}
 	var mine time.Time
 	inWindow := false
 	for _, e := range pr.Timeline {
-		if said(e) && p.isMe(e.Actor) && e.At.After(mine) {
+		if spoke(e) && p.isMe(e.Actor) && e.At.After(mine) {
 			mine, inWindow = e.At, true
 		}
 	}
 	if !inWindow {
-		spoke := slices.Contains(pr.Tags, TagCommented) || slices.Contains(pr.Tags, TagReviewed)
+		earlier := slices.Contains(pr.Tags, TagCommented) || slices.Contains(pr.Tags, TagReviewed)
 		switch {
 		case p.isMe(pr.Author):
 			mine = pr.CreatedAt
-		case !pr.TimelineTruncated || !spoke:
+		case !pr.TimelineTruncated || !earlier:
 			return ""
 		}
 	}
 	n := 0
 	for _, e := range pr.Timeline {
-		if said(e) && !p.isMe(e.Actor) && p.human(e.Actor) && e.At.After(mine) {
+		if replied(e) && !p.isMe(e.Actor) && p.human(e.Actor) && e.At.After(mine) {
 			n++
 		}
 	}

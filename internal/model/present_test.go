@@ -29,3 +29,10 @@ func TestReviewers(t *testing.T) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
+
+func TestReviewersNameDeletedAccounts(t *testing.T) {
+	got := Reviewers(PR{Opinions: []Review{{State: "APPROVED"}}})
+	if want := []ReviewerState{{Name: "ghost", State: "approved"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
