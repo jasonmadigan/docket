@@ -163,6 +163,7 @@ func (it timelineItem) model() (model.Event, bool) {
 type pullRequest struct {
 	ID         string    `json:"id"`
 	Number     int       `json:"number"`
+	State      string    `json:"state"`
 	Title      string    `json:"title"`
 	URL        string    `json:"url"`
 	IsDraft    bool      `json:"isDraft"`

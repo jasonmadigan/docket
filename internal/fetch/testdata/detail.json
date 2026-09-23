@@ -4,6 +4,7 @@
     {
       "id": "PR_1",
       "number": 42,
+      "state": "OPEN",
       "title": "Fix reconcile loop",
       "url": "https://github.com/acme/widgets/pull/42",
       "isDraft": false,

@@ -50,7 +50,7 @@ const detailQuery = `query($ids: [ID!]!, $login: String!) {
   ` + rateLimit + `
   nodes(ids: $ids) {
     ... on PullRequest {
-      id number title url isDraft createdAt
+      id number title url state isDraft createdAt
       author { __typename login }
       repository { nameWithOwner }
       headRefOid mergeable mergeStateStatus reviewDecision

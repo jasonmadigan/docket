@@ -89,7 +89,7 @@ func details(nodes ...string) string {
 }
 
 func minimal(id string) string {
-	return fmt.Sprintf(`{"id": %q, "number": 1, "title": "t", "url": "https://github.com/acme/a/pull/1", `+
+	return fmt.Sprintf(`{"id": %q, "number": 1, "state": "OPEN", "title": "t", "url": "https://github.com/acme/a/pull/1", `+
 		`"createdAt": "2026-09-01T09:00:00Z", "repository": {"nameWithOwner": "acme/a"}}`, id)
 }
 
@@ -290,5 +290,20 @@ func TestViewerFailsWithoutLogin(t *testing.T) {
 	}}
 	if _, _, err := New(f).Viewer(context.Background()); err == nil {
 		t.Fatal("Viewer succeeded without a login")
+	}
+}
+
+func TestFetchDropsPRsClosedSinceSearchIndexed(t *testing.T) {
+	merged := strings.Replace(minimal("PR_B"), `"state": "OPEN"`, `"state": "MERGED"`, 1)
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A", "PR_B")})},
+		{match: matchDetail, data: details(minimal("PR_A"), merged)},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.PRs) != 1 || res.PRs[0].ID != "PR_A" {
+		t.Fatalf("PRs = %+v, want only the open one", res.PRs)
 	}
 }

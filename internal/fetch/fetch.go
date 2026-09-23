@@ -209,7 +209,8 @@ func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, logi
 		}
 		meta.saw(resp.RateLimit)
 		for _, n := range resp.Nodes {
-			if n != nil && n.ID != "" {
+			// search lags, so a pr merged a moment ago can still be listed
+			if n != nil && n.ID != "" && n.State == "OPEN" {
 				prs = append(prs, n.model(tags[n.ID]))
 			}
 		}
