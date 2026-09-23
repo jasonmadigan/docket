@@ -1,5 +1,7 @@
 # docket
 
+[![test](https://github.com/jasonmadigan/docket/actions/workflows/test.yml/badge.svg)](https://github.com/jasonmadigan/docket/actions/workflows/test.yml)
+
 Every open pull request you're involved in, live in your terminal or a browser tab: CI, what's left before it can merge, linked issues, and how long since anyone touched it.
 
 ![docket in a terminal](docs/img/tui.png)
