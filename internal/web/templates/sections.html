@@ -1,0 +1,75 @@
+{{define "sections" -}}
+<div class="docket" data-title="{{.Title}}">
+<header>
+<h1>docket</h1>
+<p class="status">
+{{- if .Loaded}}{{.Count}} PRs · updated {{.Updated}}{{else}}fetching…{{end}}
+{{- with .Next}} · next {{.}}{{end}}
+{{- with .Budget}} · budget {{.}}{{end -}}
+</p>
+{{- with .Err}}
+<p class="error">fetch failed: {{.}}</p>
+{{- end}}
+{{- range .Warnings}}
+<p class="warning">{{.}}</p>
+{{- end}}
+</header>
+{{- range .Sections}}
+<section>
+<h2>{{.Name}} <span class="count">{{len .Rows}}</span></h2>
+{{- range .Rows}}
+<details class="pr" data-id="{{.ID}}">
+<summary>
+<span class="ci ci-{{.CI}}" title="{{.CILabel}}" aria-label="{{.CILabel}}"></span>
+<span class="age">{{.Age}}</span>
+<a class="ref" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>
+<span class="title">{{.Title}}</span>
+{{- with .Review}}
+<span class="review review-{{.}}">{{.}}</span>
+{{- end}}
+{{- with .Author}}
+<span class="author">{{.}}</span>
+{{- end}}
+<span class="tags">{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</span>
+</summary>
+<div class="detail">
+<p class="meta">{{.Meta}}</p>
+{{- with .Left}}
+<h3>What's left</h3>
+{{template "lines" .}}
+{{- end}}
+{{- with .Mine}}
+<h3>You</h3>
+{{template "lines" .}}
+{{- end}}
+{{- with .Failing}}
+<h3>Failing checks</h3>
+<ul>{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Name}}</a>{{else}}{{.Name}}{{end}}</li>{{end}}</ul>
+{{- end}}
+{{- with .Reviewers}}
+<h3>Reviewers</h3>
+<ul>{{range .}}<li>{{.Name}} <span class="muted">{{.State}}</span></li>{{end}}</ul>
+{{- end}}
+{{- with .Issues}}
+<h3>Linked issues</h3>
+<ul>{{range .}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Repo}}#{{.Number}}</a> {{.Title}} <span class="muted">{{lower .State}}</span></li>{{end}}</ul>
+{{- end}}
+</div>
+</details>
+{{- end}}
+</section>
+{{- else}}
+{{- if .Loaded}}
+<p class="empty">Nothing open involves you.</p>
+{{- end}}
+{{- end}}
+</div>
+{{- end}}
+
+{{define "lines" -}}
+<ul class="lines">
+{{- range .}}
+<li class="line-{{.Kind}}">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Text}}</a>{{else}}{{.Text}}{{end}}</li>
+{{- end}}
+</ul>
+{{- end}}

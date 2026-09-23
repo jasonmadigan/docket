@@ -1,0 +1,245 @@
+package web
+
+import (
+	"bufio"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/charmbracelet/x/exp/golden"
+
+	"github.com/jasonmadigan/docket/internal/engine"
+	"github.com/jasonmadigan/docket/internal/fixture"
+	"github.com/jasonmadigan/docket/internal/model"
+)
+
+type fakeEngine struct {
+	mu     sync.Mutex
+	state  engine.State
+	states chan engine.State
+	live   int
+}
+
+func newFake(st engine.State) *fakeEngine {
+	return &fakeEngine{state: st, states: make(chan engine.State, 1)}
+}
+
+func (f *fakeEngine) Current() engine.State {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.state
+}
+
+func (f *fakeEngine) Subscribe() (<-chan engine.State, func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.live++
+	return f.states, func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.live--
+	}
+}
+
+func (f *fakeEngine) subscribers() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.live
+}
+
+func handler(t *testing.T, eng Engine) http.Handler {
+	t.Helper()
+	s, err := New(eng, Options{Location: time.UTC, KeepAlive: 20 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Handler()
+}
+
+func get(t *testing.T, h http.Handler, host, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Host = host
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestSectionsGolden(t *testing.T) {
+	rec := get(t, handler(t, newFake(fixture.State())), "127.0.0.1:7788", "/sections")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	golden.RequireEqual(t, rec.Body.String())
+}
+
+func TestPageWrapsSections(t *testing.T) {
+	body := get(t, handler(t, newFake(fixture.State())), "localhost:7788", "/").Body.String()
+	for _, want := range []string{
+		"<title>docket (5)</title>",
+		`<link rel="stylesheet" href="/static/style.css">`,
+		`<script src="/static/app.js" defer></script>`,
+		`<main id="sections"><div class="docket" data-title="docket (5)">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+}
+
+func TestHostGuard(t *testing.T) {
+	h := handler(t, newFake(fixture.State()))
+	cases := map[string]int{
+		"localhost:7788":         http.StatusOK,
+		"LOCALHOST":              http.StatusOK,
+		"127.0.0.1:7788":         http.StatusOK,
+		"[::1]:7788":             http.StatusOK,
+		"192.168.1.20:7788":      http.StatusOK,
+		"evil.example:7788":      http.StatusForbidden,
+		"localhost.evil.example": http.StatusForbidden,
+		"":                       http.StatusForbidden,
+	}
+	for host, want := range cases {
+		if got := get(t, h, host, "/").Code; got != want {
+			t.Errorf("Host %q: status %d, want %d", host, got, want)
+		}
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	rec := get(t, handler(t, newFake(fixture.State())), "localhost", "/")
+	for k, want := range map[string]string{
+		"Content-Security-Policy": "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+		"X-Content-Type-Options":  "nosniff",
+		"Referrer-Policy":         "no-referrer",
+		"Cache-Control":           "no-store",
+	} {
+		if got := rec.Header().Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+}
+
+func TestStaticAssets(t *testing.T) {
+	h := handler(t, newFake(fixture.State()))
+	for path, kind := range map[string]string{"/static/app.js": "javascript", "/static/style.css": "text/css"} {
+		rec := get(t, h, "localhost", path)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), kind) {
+			t.Errorf("%s: %d %q", path, rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+	if code := get(t, h, "localhost", "/static/").Code; code != http.StatusNotFound {
+		t.Errorf("directory listing: status %d", code)
+	}
+}
+
+func TestUnsafeLinksNeutralised(t *testing.T) {
+	prs := fixture.PRs()
+	prs[0].Checks.Failing[0].URL = "javascript:alert(1)"
+	st := fixture.State()
+	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
+	if strings.Contains(body, "javascript:") || !strings.Contains(body, "#ZgotmplZ") {
+		t.Fatal("a javascript: link survived rendering")
+	}
+}
+
+func TestLoadingAndEmpty(t *testing.T) {
+	body := get(t, handler(t, newFake(engine.State{})), "localhost", "/sections").Body.String()
+	if !strings.Contains(body, "fetching…") || strings.Contains(body, "<section>") {
+		t.Fatalf("loading page:\n%s", body)
+	}
+	body = get(t, handler(t, newFake(engine.State{Loaded: true, Updated: fixture.Now})), "localhost", "/sections").Body.String()
+	if !strings.Contains(body, "Nothing open involves you.") {
+		t.Fatalf("empty page:\n%s", body)
+	}
+}
+
+func TestEventsAnnounceStatesAndCleanUp(t *testing.T) {
+	eng := newFake(fixture.State())
+	srv := httptest.NewServer(handler(t, eng))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content type %q", ct)
+	}
+	lines := make(chan string, 100)
+	go func() {
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+	expect := func(want string) {
+		t.Helper()
+		timeout := time.After(2 * time.Second)
+		for {
+			select {
+			case line := <-lines:
+				if line == want {
+					return
+				}
+			case <-timeout:
+				t.Fatalf("no %q line", want)
+			}
+		}
+	}
+	eng.states <- fixture.State()
+	expect("event: snapshot")
+	expect(": keepalive")
+	cancel()
+	resp.Body.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for eng.subscribers() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("a closed tab left its subscription behind")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestRunServesUntilCancelled(t *testing.T) {
+	r, w := io.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, newFake(fixture.State()), Options{Addr: "127.0.0.1:0", Log: w, Location: time.UTC})
+	}()
+	line, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _, _ = io.Copy(io.Discard, r) }()
+	link := strings.TrimSpace(strings.TrimPrefix(line, "docket: serving "))
+	resp, err := http.Get(link + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not stop")
+	}
+}

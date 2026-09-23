@@ -1,0 +1,141 @@
+<div class="docket" data-title="docket (5)">
+<header>
+<h1>docket</h1>
+<p class="status">5 PRs · updated 12:00 · next 12:01 · budget 4812/5000</p>
+</header>
+<section>
+<h2>Mine <span class="count">2</span></h2>
+<details class="pr" data-id="PR_2">
+<summary>
+<span class="ci ci-pass" title="CI passing" aria-label="CI passing"></span>
+<span class="age">5w</span>
+<a class="ref" href="https://github.com/acme/widgets/pull/51" target="_blank" rel="noopener noreferrer">acme/widgets#51</a>
+<span class="title">Add rate limit docs</span>
+<span class="review review-approved">approved</span>
+<span class="tags"><span class="tag">author</span></span>
+</summary>
+<div class="detail">
+<p class="meta">opened 5w ago · touched 5w ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-good">ready to merge</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">1 reply since yours</li>
+</ul>
+<h3>Reviewers</h3>
+<ul><li>dave <span class="muted">approved</span></li></ul>
+</div>
+</details>
+<details class="pr" data-id="PR_1">
+<summary>
+<span class="ci ci-fail" title="CI failing" aria-label="CI failing"></span>
+<span class="age">2d</span>
+<a class="ref" href="https://github.com/acme/widgets/pull/42" target="_blank" rel="noopener noreferrer">acme/widgets#42</a>
+<span class="title">Fix reconcile loop when the gateway disappears</span>
+<span class="review review-changes">changes</span>
+<span class="tags"><span class="tag">author</span></span>
+</summary>
+<div class="detail">
+<p class="meta">opened 5d ago · touched 2d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-bad"><a href="https://ci.example/e2e" target="_blank" rel="noopener noreferrer">CI failing: e2e</a></li>
+<li class="line-bad">changes requested by carol</li>
+<li class="line-wait">2 unresolved threads</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">1 reply since yours</li>
+</ul>
+<h3>Failing checks</h3>
+<ul><li><a href="https://ci.example/e2e" target="_blank" rel="noopener noreferrer">e2e</a></li></ul>
+<h3>Reviewers</h3>
+<ul><li>carol <span class="muted">requested changes</span></li></ul>
+<h3>Linked issues</h3>
+<ul><li><a href="https://github.com/acme/widgets/issues/7" target="_blank" rel="noopener noreferrer">acme/widgets#7</a> Loop never ends <span class="muted">open</span></li></ul>
+</div>
+</details>
+</section>
+<section>
+<h2>Requested <span class="count">2</span></h2>
+<details class="pr" data-id="PR_4">
+<summary>
+<span class="ci ci-pass" title="CI passing" aria-label="CI passing"></span>
+<span class="age">9d</span>
+<a class="ref" href="https://github.com/acme/gateway/pull/1188" target="_blank" rel="noopener noreferrer">acme/gateway#1188</a>
+<span class="title">Bump Envoy to 1.37</span>
+<span class="review review-review">review</span>
+<span class="author">bob</span>
+<span class="tags"><span class="tag">team (acme/devs)</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by bob · opened 9d ago · touched 9d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-bad">conflicts</li>
+<li class="line-wait">awaiting acme/devs</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">review requested from acme/devs 9d ago</li>
+</ul>
+<h3>Reviewers</h3>
+<ul><li>acme/devs <span class="muted">review requested</span></li></ul>
+</div>
+</details>
+<details class="pr" data-id="PR_3">
+<summary>
+<span class="ci ci-running" title="CI running" aria-label="CI running"></span>
+<span class="age">1d</span>
+<a class="ref" href="https://github.com/acme/gateway/pull/1203" target="_blank" rel="noopener noreferrer">acme/gateway#1203</a>
+<span class="title">Support weighted backends</span>
+<span class="review review-review">review</span>
+<span class="author">alice</span>
+<span class="tags"><span class="tag">review</span><span class="tag">commented</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by alice · opened 3d ago · touched 1d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-wait">CI running</li>
+<li class="line-wait">awaiting me</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">review requested 1d ago</li>
+<li class="line-wait">you commented, 2 commits since</li>
+<li class="line-wait">1 reply since yours</li>
+</ul>
+<h3>Reviewers</h3>
+<ul><li>me <span class="muted">review requested</span></li></ul>
+</div>
+</details>
+</section>
+<section>
+<h2>Mentioned <span class="count">1</span></h2>
+<details class="pr" data-id="PR_5">
+<summary>
+<span class="ci ci-none" title="no CI" aria-label="no CI"></span>
+<span class="age">1y</span>
+<a class="ref" href="https://github.com/acme/docs/pull/88" target="_blank" rel="noopener noreferrer">acme/docs#88</a>
+<span class="title">Rewrite the getting started guide</span>
+<span class="author">erin</span>
+<span class="tags"><span class="tag">mentioned</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by erin · opened 2y ago · touched 1y ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-info">no CI</li>
+<li class="line-good">ready to merge</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">mentioned by erin 1y ago</li>
+</ul>
+</div>
+</details>
+</section>
+</div>

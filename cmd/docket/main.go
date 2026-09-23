@@ -18,12 +18,14 @@ import (
 	"github.com/jasonmadigan/docket/internal/fetch"
 	"github.com/jasonmadigan/docket/internal/gh"
 	"github.com/jasonmadigan/docket/internal/tui"
+	"github.com/jasonmadigan/docket/internal/web"
 )
 
 const usage = `usage: docket [command] [flags]
 
 commands:
   (none)  terminal UI
+  web     web view on localhost
   dump    fetch once, print, exit
   help    show this
 
@@ -48,9 +50,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("docket "+cmd, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	poll := flags.Duration("poll", 0, "time between refreshes (default from config, else 60s)")
-	asJSON := new(bool)
+	var (
+		addr   = new(string)
+		open   = new(bool)
+		asJSON = new(bool)
+	)
 	switch cmd {
 	case "tui":
+	case "web":
+		flags.StringVar(addr, "addr", "127.0.0.1:7788", "listen address; anything but loopback exposes private repo titles")
+		flags.BoolVar(open, "open", false, "open the page in a browser")
 	case "dump":
 		flags.BoolVar(asJSON, "json", false, "print JSON")
 	case "help":
@@ -78,8 +87,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	eng := engine.New(fetch.New(client), engine.Config{Poll: cfg.Poll, Ignore: cfg.IgnoreActors})
-	if cmd == "dump" {
+	switch cmd {
+	case "dump":
 		return printOnce(ctx, eng, stdout, stderr, *asJSON)
+	case "web":
+		return serve(ctx, eng, func(ctx context.Context) error {
+			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr})
+		})
 	}
 	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng) })
 }
