@@ -22,7 +22,7 @@
 <summary>
 <span class="ci ci-{{.CI}}" title="{{.CILabel}}" aria-label="{{.CILabel}}"></span>
 <span class="age">{{.Age}}</span>
-<a class="ref" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>
+{{if .URL}}<a class="ref" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>{{else}}<span class="ref">{{.Ref}}</span>{{end}}
 <span class="title">{{.Title}}</span>
 {{- with .Review}}
 <span class="review review-{{.}}">{{.}}</span>
@@ -52,7 +52,7 @@
 {{- end}}
 {{- with .Issues}}
 <h3>Linked issues</h3>
-<ul>{{range .}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Repo}}#{{.Number}}</a> {{.Title}} <span class="muted">{{lower .State}}</span></li>{{end}}</ul>
+<ul>{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Repo}}#{{.Number}}</a>{{else}}{{.Repo}}#{{.Number}}{{end}} {{.Title}} <span class="muted">{{lower .State}}</span></li>{{end}}</ul>
 {{- end}}
 </div>
 </details>

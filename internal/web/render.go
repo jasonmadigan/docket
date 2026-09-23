@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jasonmadigan/docket/internal/browser"
 	"github.com/jasonmadigan/docket/internal/engine"
 	"github.com/jasonmadigan/docket/internal/model"
 )
@@ -81,7 +82,7 @@ func view(st engine.State, loc *time.Location) pageView {
 func rowOf(r model.Row, snap model.Snapshot) rowView {
 	v := rowView{
 		ID:        r.PR.ID,
-		URL:       r.PR.URL,
+		URL:       webOnly(r.PR.URL),
 		Ref:       r.PR.Ref(),
 		Title:     r.PR.Title,
 		Tags:      r.Labels(),
@@ -90,14 +91,38 @@ func rowOf(r model.Row, snap model.Snapshot) rowView {
 		Review:    r.Review,
 		Age:       snap.Since(r.Activity),
 		Meta:      snap.Meta(r),
-		Left:      r.Left,
-		Mine:      r.Mine,
-		Failing:   r.PR.Checks.Failing,
+		Left:      webLines(r.Left),
+		Mine:      webLines(r.Mine),
 		Reviewers: model.Reviewers(r.PR),
-		Issues:    r.PR.Issues,
+	}
+	for _, c := range r.PR.Checks.Failing {
+		v.Failing = append(v.Failing, model.Check{Name: c.Name, URL: webOnly(c.URL)})
+	}
+	for _, is := range r.PR.Issues {
+		is.URL = webOnly(is.URL)
+		v.Issues = append(v.Issues, is)
 	}
 	if !snap.IsMe(r.PR.Author) {
 		v.Author = r.PR.Author.Login
 	}
 	return v
+}
+
+// webOnly drops links other than http and https: check urls come from
+// third-party apps, and html/template still lets mailto and relative ones
+// through.
+func webOnly(url string) string {
+	if browser.Valid(url) {
+		return url
+	}
+	return ""
+}
+
+func webLines(lines []model.Line) []model.Line {
+	out := make([]model.Line, len(lines))
+	for i, l := range lines {
+		l.URL = webOnly(l.URL)
+		out[i] = l
+	}
+	return out
 }

@@ -144,8 +144,8 @@ func TestUnsafeLinksNeutralised(t *testing.T) {
 	st := fixture.State()
 	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
 	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
-	if strings.Contains(body, "javascript:") || !strings.Contains(body, "#ZgotmplZ") {
-		t.Fatal("a javascript: link survived rendering")
+	if strings.Contains(body, "javascript:") || !strings.Contains(body, "<li>e2e</li>") {
+		t.Fatal("a javascript: link survived rendering, or took the check name with it")
 	}
 }
 
@@ -241,5 +241,25 @@ func TestRunServesUntilCancelled(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Run did not stop")
+	}
+}
+
+func TestOnlyWebLinksAreRendered(t *testing.T) {
+	prs := fixture.PRs()
+	prs[0].Checks.Failing[0].URL = "mailto:someone@example.com"
+	prs[0].Issues[0].URL = "/relative"
+	prs[1].URL = "ftp://example.com/pr"
+	st := fixture.State()
+	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
+	for _, bad := range []string{`href="mailto:`, `href="/relative"`, `href="ftp:`, `href=""`} {
+		if strings.Contains(body, bad) {
+			t.Errorf("rendered %s", bad)
+		}
+	}
+	for _, text := range []string{"acme/widgets#7", "acme/widgets#51", "CI failing: e2e"} {
+		if !strings.Contains(body, text) {
+			t.Errorf("lost the text %q along with its link", text)
+		}
 	}
 }
