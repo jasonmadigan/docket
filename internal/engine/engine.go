@@ -22,7 +22,7 @@ type Config struct {
 	Ignore      []string
 	Backoff     []time.Duration // wait after each consecutive failure; the last step repeats
 	ViewerEvery time.Duration   // how often login and teams are refetched
-	Timeout     time.Duration   // one poll
+	Timeout     time.Duration   // one poll; each request also has its own 30s limit
 	Now         func() time.Time
 }
 
@@ -64,7 +64,7 @@ func New(src Source, cfg Config) *Engine {
 		cfg.ViewerEvery = time.Hour
 	}
 	if cfg.Timeout <= 0 {
-		cfg.Timeout = 30 * time.Second
+		cfg.Timeout = 2 * time.Minute
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now

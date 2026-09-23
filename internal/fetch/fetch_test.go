@@ -307,3 +307,28 @@ func TestFetchDropsPRsClosedSinceSearchIndexed(t *testing.T) {
 		t.Fatalf("PRs = %+v, want only the open one", res.PRs)
 	}
 }
+
+// measured live on 23 September 2026: 20 PRs a request took about 7s and
+// drew intermittent 502s from github's 10s query limit; 10 took about 5s.
+func TestFetchDetailsTenAtATime(t *testing.T) {
+	ids := make([]string, 24)
+	nodes := make([]string, 24)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("PR_%02d", i)
+		nodes[i] = minimal(ids[i])
+	}
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"author": found(ids...)})},
+		{match: matchDetail, data: details(nodes[:10]...)},
+		{match: matchDetail, data: details(nodes[10:20]...)},
+		{match: matchDetail, data: details(nodes[20:]...)},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if len(res.PRs) != 24 {
+		t.Fatalf("got %d PRs", len(res.PRs))
+	}
+}

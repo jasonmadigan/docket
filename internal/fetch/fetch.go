@@ -24,8 +24,10 @@ type Fetcher struct {
 	batch int
 }
 
+// New batches detail ten prs a request: twenty took about 7s live and drew
+// intermittent 502s from github's query time limit.
 func New(t Transport) *Fetcher {
-	return &Fetcher{t: t, batch: 20}
+	return &Fetcher{t: t, batch: 10}
 }
 
 type Viewer struct {

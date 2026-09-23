@@ -111,14 +111,14 @@ Libraries: `github.com/cli/go-gh/v2` (auth, GraphQL client), Bubble Tea, Bubbles
 Each tick:
 
 1. Discovery: one GraphQL request, a `search` alias per qualifier, ids only. Pages past 100 are followed.
-2. Detail for every discovered PR, through `nodes(ids:)`, 20 per request.
+2. Detail for every discovered PR, through `nodes(ids:)`, 10 per request.
 3. `model` builds a snapshot from detail and tags; the engine publishes it to subscribers.
 
 No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot.
 
 At startup and hourly: `viewer { login }` and my team memberships, to name the team a request went to.
 
-Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: discovery 1 point, detail 3 for 24 PRs (2 per 20), so about 240 points an hour at the 60s default, from the 5,000 shared by everything using my token, agents included. `mergeStateStatus` needs no preview header.
+Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: a poll of 24 PRs costs 4 to 5 points and takes about 15s, so about 300 points an hour at the 60s default, from the 5,000 shared by everything using my token, agents included. Detail goes 10 PRs a request: 20 took about 7s and drew intermittent 502s from GitHub's query time limit. Each request times out at 30s, a whole poll at 2 minutes. `mergeStateStatus` needs no preview header.
 
 ### Errors
 

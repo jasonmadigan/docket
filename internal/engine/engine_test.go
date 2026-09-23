@@ -269,3 +269,9 @@ func TestSubscribersGetOnlyTheLatest(t *testing.T) {
 	unsubscribe()
 	e.publish(State{})
 }
+
+func TestPollTimeoutLeavesRoomForManyBatches(t *testing.T) {
+	if got := New(&static{}, Config{}).cfg.Timeout; got < 2*time.Minute {
+		t.Fatalf("poll timeout %v: a live poll of 24 PRs takes about 15s, and each request has its own 30s limit", got)
+	}
+}
