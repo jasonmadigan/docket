@@ -13,6 +13,7 @@ An always-open view of every open GitHub pull request I'm involved in: state, CI
 - Read-only. The only action is opening things in the browser.
 - TUI and web both ship. Each runs the engine in-process. With no state, two copies running at once can't conflict; they only double a cheap poll.
 - Go, single binary `docket`, auth borrowed from `gh`.
+- macOS 26 on Apple silicon is the main platform, in Terminal.app or iTerm2. Linux works too, including over SSH.
 - Not a `gh` extension. Extensions live under `~/.local/share/gh`, which home-config syncs, so a per-arch binary would reach hosts it can't run on.
 
 ## Involvement
@@ -60,13 +61,14 @@ Every line that applies, in this order. CI lines read the head commit's check ro
 | no checks | no CI |
 | `reviewDecision: CHANGES_REQUESTED` | changes requested by X |
 | `reviewDecision: REVIEW_REQUIRED`, requests pending | awaiting X |
-| `reviewDecision: REVIEW_REQUIRED`, no requests, no reviews | no reviewer |
+| `reviewDecision: REVIEW_REQUIRED`, no requests, some approvals | needs more approvals |
+| `reviewDecision: REVIEW_REQUIRED`, no requests, no approvals | no reviewer |
 | unresolved review threads | N unresolved threads |
 | none of the above, `mergeStateStatus: CLEAN` | ready to merge |
 
 `mergeable: UNKNOWN` shows nothing; GitHub computes it lazily and a later tick has it. A null `reviewDecision` means the repo requires no review, so no review line.
 
-On PRs I didn't open, my side too:
+Then my side. The review lines only arise on PRs I didn't open; replies count from my last comment or review, or from opening the PR when it's mine.
 
 | Condition | Shown |
 |-|-|
@@ -78,25 +80,29 @@ On PRs I didn't open, my side too:
 | mentioned, nothing from me since | mentioned by X Nd ago |
 | others commented after my last comment | N replies since yours |
 
-`<state>` is approved, requested changes or commented.
+`<state>` is approved, requested changes or commented. GitHub's mention event names only the person mentioned; the mentioner is whoever wrote the comment, review or PR created within 5 seconds of it. When the timeline window (last 100 items) doesn't reach my last comment, the count is shown as a floor, e.g. `3+`.
 
 ### Human activity
 
-The latest commit (committer date), force push, comment, review or review comment by an actor that is neither a GitHub App (`Bot`, or a login ending `[bot]`) nor listed in `ignore_actors`. Label edits, CI runs and bot comments don't count, which rules out `updatedAt`.
+The latest opening, commit (committer date), force push, comment, review, review comment or review request by an actor that is neither a GitHub App (`Bot`, or a login ending `[bot]`) nor listed in `ignore_actors`. Label edits, CI runs and bot comments don't count, which rules out `updatedAt`.
 
 ## Architecture
 
 ```text
 cmd/docket/        flags, config, subcommands
+internal/config/   config file
 internal/gh/       GraphQL transport: auth from gh, rate-limit accounting
-internal/fetch/    discovery and detail queries, response types
+internal/fetch/    discovery and detail queries, API responses into model.PR
 internal/model/    pure: tags, sections, what's left, activity age
 internal/engine/   poll loop, snapshot fan-out
 internal/tui/      Bubble Tea view
 internal/web/      net/http, html/template, SSE, embedded assets
+internal/browser/  opening links, SSH detection
+internal/dump/     text and JSON output
+internal/fixture/  fixed state for view tests
 ```
 
-Dependencies point down only: views on `engine` and `model`, `engine` on `fetch` and `model`, `fetch` on `gh`. `model` does no I/O.
+Dependencies point down only: views on `engine` and `model`, `engine` on `fetch` and `model`, `fetch` on `gh` and `model`. `model` does no I/O and knows nothing of GraphQL.
 
 Libraries: `github.com/cli/go-gh/v2` (auth, GraphQL client), Bubble Tea, Bubbles, Lip Gloss, `github.com/BurntSushi/toml`. The web view uses the standard library only: no JS framework, no build step. Module path `github.com/jasonmadigan/docket`.
 
@@ -112,7 +118,7 @@ No change detection. Refetching everything is cheap at this volume, and several 
 
 At startup and hourly: `viewer { login }` and my team memberships, to name the team a request went to.
 
-Every query selects `rateLimit { cost remaining resetAt }`, and both views show the remaining budget. Estimate per tick: discovery 1 point, detail about 2 per 20 PRs. Today's 23 PRs cost about 5, so 300 points an hour at the 60s default, from the 5,000 shared by everything using my token, agents included. Build step 1 replaces the estimate with measured cost.
+Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: discovery 1 point, detail 3 for 24 PRs (2 per 20), so about 240 points an hour at the 60s default, from the 5,000 shared by everything using my token, agents included. `mergeStateStatus` needs no preview header.
 
 ### Errors
 
@@ -122,7 +128,7 @@ Every query selects `rateLimit { cost remaining resetAt }`, and both views show 
 | poll fails (network, 5xx) | keep the last snapshot, show the error and time of last success; retry after 1m, 2m, 4m, capped at 10m; normal cadence after a success |
 | secondary rate limit | wait out `Retry-After` |
 | under 10% of budget left | stretch the interval to land after `resetAt` |
-| partial GraphQL errors, e.g. an org enforcing SAML that the token isn't authorised for | keep what came back, name the affected orgs in the status line |
+| partial GraphQL errors, e.g. an org enforcing SAML that the token isn't authorised for | keep what came back; show GitHub's messages as warnings (they don't name the org) |
 | search index lag | a new PR can take a minute to show; accepted |
 
 ## Commands
@@ -152,12 +158,13 @@ Full screen: one list under section headers, detail pane to the right (below on 
 | `?` | help |
 | `q` | quit |
 
-Opening runs `open` or `xdg-open`. Over SSH, where neither reaches my screen, it copies the URL with OSC 52 instead.
+Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Over SSH, where neither reaches my screen, it copies the URL with OSC 52 instead. Colours follow the terminal's reported background.
 
 ### Web
 
 - Listens on `127.0.0.1:7788`. Any other address needs an explicit `--addr` and prints a warning: there's no auth, and private repo titles are on the page.
-- Rejects requests whose `Host` isn't a loopback name or address, which blocks DNS rebinding.
+- Rejects requests whose `Host` is a name other than `localhost`, which blocks DNS rebinding; IP literals pass, so an explicit `--addr` still works from the LAN.
+- `Content-Security-Policy: default-src 'self'`; styles and script are separate embedded files.
 - Server-rendered sections. Rows link to the PR, failing checks and linked issues.
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
 - Tab title carries the count: `docket (23)`.
@@ -175,19 +182,20 @@ ignore_actors = []
 
 ## Install
 
-`go install ./cmd/docket` on each host. The binary lands in `~/go/bin`, which home-config doesn't sync. Nothing gets built inside the repo, since `~/Work` syncs between hosts.
+`go install ./cmd/docket` on each host. The binary lands in `~/go/bin`, which home-config doesn't sync. Nothing gets built inside the repo, since `~/Work` syncs between hosts: `go build ./...`, never `go build ./cmd/docket`.
 
 ## Testing
 
-- `model`: table tests over synthetic fixtures shaped like API responses. No recorded private-repo data in the tree.
+- `model`: table tests over hand-built `model.PR` values.
+- `fetch`: fake transport fed synthetic JSON shaped like API responses. No recorded private-repo data in the tree.
 - `engine`: fake fetcher. Snapshot fan-out, backoff, partial errors, budget stretching.
-- `fetch`: live test behind `-tags live`, on my gh auth. Asserts the queries run and records their cost.
+- `fetch` live test behind `-tags live`, on my gh auth. Asserts the queries run and logs their cost.
 - `web`: `httptest` and golden HTML, including the `Host` check.
 - `tui`: `teatest` golden frames from a fixed snapshot.
 
 ## Build order
 
-1. `gh`, `fetch`, `model`, `docket dump`. Settles against the live API: go-gh reading the keyring token, the SAML error shape, whether `mergeStateStatus` still needs the merge-info preview header, timeline field semantics, measured cost.
+1. `gh`, `fetch`, `model`, `docket dump`, checked against the live API.
 2. `engine`: polling, backoff, budget.
 3. TUI.
 4. Web.
