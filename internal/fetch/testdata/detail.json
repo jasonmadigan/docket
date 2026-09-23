@@ -1,0 +1,62 @@
+{
+  "rateLimit": {"cost": 2, "remaining": 4980, "limit": 5000, "resetAt": "2026-09-23T13:00:00Z"},
+  "nodes": [
+    {
+      "id": "PR_1",
+      "number": 42,
+      "title": "Fix reconcile loop",
+      "url": "https://github.com/acme/widgets/pull/42",
+      "isDraft": false,
+      "createdAt": "2026-09-01T09:00:00Z",
+      "author": {"__typename": "User", "login": "alice"},
+      "repository": {"nameWithOwner": "acme/widgets"},
+      "headRefOid": "c3",
+      "mergeable": "MERGEABLE",
+      "mergeStateStatus": "BLOCKED",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "reviewRequests": {"nodes": [
+        {"requestedReviewer": {"__typename": "User", "login": "me"}},
+        {"requestedReviewer": {"__typename": "Team", "combinedSlug": "acme/devs"}},
+        {"requestedReviewer": null}
+      ]},
+      "latestOpinionatedReviews": {"nodes": [
+        {"author": {"__typename": "User", "login": "carol"}, "state": "APPROVED", "submittedAt": "2026-09-02T10:00:00Z", "commit": {"oid": "c2"}}
+      ]},
+      "myReviews": {"nodes": [
+        {"author": {"__typename": "User", "login": "me"}, "state": "COMMENTED", "submittedAt": "2026-09-02T11:00:00Z", "commit": {"oid": "c2"}}
+      ]},
+      "reviewThreads": {"pageInfo": {"hasNextPage": false}, "nodes": [{"isResolved": false}, {"isResolved": true}, {"isResolved": false}]},
+      "commits": {"totalCount": 3, "nodes": [
+        {"commit": {"oid": "c1", "committedDate": "2026-09-01T09:00:00Z", "author": {"name": "Alice", "user": {"login": "alice"}}}},
+        {"commit": {"oid": "c2", "committedDate": "2026-09-02T09:00:00Z", "author": {"name": "dependabot[bot]", "user": null}}},
+        {"commit": {"oid": "c3", "committedDate": "2026-09-03T09:00:00Z", "author": {"name": "Alice", "user": null}}}
+      ]},
+      "head": {"nodes": [{"commit": {"statusCheckRollup": {
+        "state": "FAILURE",
+        "contexts": {
+          "checkRunCountsByState": [{"state": "FAILURE", "count": 1}, {"state": "TIMED_OUT", "count": 1}, {"state": "SUCCESS", "count": 4}],
+          "statusContextCountsByState": [{"state": "ERROR", "count": 1}, {"state": "SUCCESS", "count": 1}],
+          "nodes": [
+            {"__typename": "CheckRun", "name": "e2e", "conclusion": "FAILURE", "detailsUrl": "https://ci.example/e2e"},
+            {"__typename": "CheckRun", "name": "lint", "conclusion": "SUCCESS", "detailsUrl": "https://ci.example/lint"},
+            {"__typename": "CheckRun", "name": "unit", "conclusion": null, "detailsUrl": "https://ci.example/unit"},
+            {"__typename": "StatusContext", "context": "ci/prow", "state": "ERROR", "targetUrl": "https://prow.example/1"}
+          ]
+        }
+      }}}]},
+      "closingIssuesReferences": {"nodes": [
+        {"number": 7, "title": "Loop never ends", "url": "https://github.com/acme/widgets/issues/7", "state": "OPEN", "repository": {"nameWithOwner": "acme/widgets"}}
+      ]},
+      "timelineItems": {"pageInfo": {"hasPreviousPage": true}, "nodes": [
+        {"__typename": "ReviewRequestedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-01T09:05:00Z", "requestedReviewer": {"__typename": "User", "login": "me"}},
+        {"__typename": "IssueComment", "author": {"__typename": "Bot", "login": "coderabbitai"}, "createdAt": "2026-09-01T09:10:00Z"},
+        {"__typename": "PullRequestReview", "author": {"__typename": "User", "login": "me"}, "submittedAt": "2026-09-02T11:00:00Z", "state": "COMMENTED"},
+        {"__typename": "PullRequestReview", "author": {"__typename": "User", "login": "me"}, "submittedAt": null, "state": "PENDING"},
+        {"__typename": "HeadRefForcePushedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-03T09:30:00Z"},
+        {"__typename": "MentionedEvent", "actor": {"__typename": "User", "login": "me"}, "createdAt": "2026-09-03T10:00:00Z"},
+        {"__typename": "IssueComment", "author": null, "createdAt": "2026-09-03T10:00:00Z"}
+      ]}
+    },
+    null
+  ]
+}
