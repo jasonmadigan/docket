@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/colorprofile"
+
 	"github.com/jasonmadigan/docket/internal/config"
 	"github.com/jasonmadigan/docket/internal/dump"
 	"github.com/jasonmadigan/docket/internal/engine"
@@ -127,7 +129,13 @@ func printOnce(ctx context.Context, eng *engine.Engine, stdout, stderr io.Writer
 	if asJSON {
 		return dump.JSON(stdout, st.Snapshot)
 	}
-	return dump.Text(stdout, st.Snapshot)
+	return dump.Text(textOut(stdout), st.Snapshot)
+}
+
+// textOut strips styling when w isn't a terminal and fits it to the
+// terminal's colours when it is.
+func textOut(w io.Writer) io.Writer {
+	return colorprofile.NewWriter(w, os.Environ())
 }
 
 type runner interface {

@@ -1,15 +1,20 @@
 Mine (2)
   pass      5w  acme/widgets#51  Add rate limit docs
                 author · ready to merge
+                https://github.com/acme/widgets/pull/51
   fail      2d  acme/widgets#42  Fix reconcile loop when the gateway disappears
-                author · CI failing: e2e · changes requested by carol · 2 unresolved threads · 1 reply since yours
+                author · CI failing: e2e · changes requested by carol · 2 unresolved threads · 1 reply since yours · linked acme/widgets#7 open
+                https://github.com/acme/widgets/pull/42
 
 Requested (2)
   pass      9d  acme/gateway#1188  Bump Envoy to 1.37
                 team (acme/devs) · conflicts · awaiting acme/devs · review requested from acme/devs 9d ago
+                https://github.com/acme/gateway/pull/1188
   running   1d  acme/gateway#1203  Support weighted backends
                 review, commented · CI running · awaiting me · review requested 1d ago · you commented, 2 commits since · 1 reply since yours
+                https://github.com/acme/gateway/pull/1203
 
 Mentioned (1)
   none      1y  acme/docs#88  Rewrite the getting started guide
                 mentioned · no CI · ready to merge · mentioned by erin 1y ago
+                https://github.com/acme/docs/pull/88
