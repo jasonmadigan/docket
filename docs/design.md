@@ -138,6 +138,7 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 | `docket` | TUI |
 | `docket web` | web view |
 | `docket dump` | one fetch, print the snapshot, exit |
+| `docket help` | usage |
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
@@ -155,6 +156,7 @@ Full screen: one list under section headers, detail pane to the right (below on 
 | `i` | open linked issues |
 | `r` | refresh now |
 | `/` | filter by text |
+| `esc` | clear the filter, close help |
 | `?` | help |
 | `q` | quit |
 
