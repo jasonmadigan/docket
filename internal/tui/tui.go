@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jasonmadigan/docket/internal/browser"
+	"github.com/jasonmadigan/docket/internal/config"
 	"github.com/jasonmadigan/docket/internal/engine"
 	"github.com/jasonmadigan/docket/internal/model"
 )
@@ -22,9 +24,17 @@ type Engine interface {
 	Refresh()
 }
 
+// Settings reads and changes docket's settings; config.Store in practice.
+type Settings interface {
+	Get() config.Config
+	Set(config.Config) error
+	Path() string
+}
+
 type Options struct {
 	Open     func(urls ...string) tea.Cmd // defaults to the browser, or the clipboard over ssh
 	Location *time.Location
+	Settings Settings // nil hides the settings
 }
 
 type (
@@ -60,10 +70,17 @@ type Model struct {
 	// changed holds prs new or different since a poll, until visited
 	changed map[string]bool
 	seen    time.Time // the poll changed was last filled from
+
+	settings  Settings
+	editing   bool // the settings panel is open
+	draftPoll time.Duration
+	ignore    textinput.Model
+	focus     int // 0 interval, 1 accounts, 2 save, 3 cancel
+	formErr   string
 }
 
-func Run(ctx context.Context, eng Engine) error {
-	m, unsubscribe := New(eng, Options{})
+func Run(ctx context.Context, eng Engine, settings Settings) error {
+	m, unsubscribe := New(eng, Options{Settings: settings})
 	defer unsubscribe()
 	_, err := tea.NewProgram(m, tea.WithContext(ctx)).Run()
 	if ctx.Err() != nil {
@@ -83,15 +100,20 @@ func New(eng Engine, opts Options) (Model, func()) {
 	filter := textinput.New()
 	filter.Prompt = "/"
 	filter.Placeholder = "repo, title, author or tag"
+	ignore := textinput.New()
+	ignore.Prompt = ""
+	ignore.Placeholder = "none"
 	return Model{
-		states:  states,
-		refresh: eng.Refresh,
-		open:    opts.Open,
-		loc:     opts.Location,
-		filter:  filter,
-		st:      newStyles(true),
-		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
-		changed: map[string]bool{},
+		settings: opts.Settings,
+		ignore:   ignore,
+		states:   states,
+		refresh:  eng.Refresh,
+		open:     opts.Open,
+		loc:      opts.Location,
+		filter:   filter,
+		st:       newStyles(true),
+		spin:     spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		changed:  map[string]bool{},
 	}, unsubscribe
 }
 
@@ -133,7 +155,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case stateMsg:
 		m.state = engine.State(msg)
-		m.flash = ""
+		if !m.state.Busy {
+			m.flash = ""
+		}
 		if s := m.state; s.Loaded && !s.Busy && !s.Updated.Equal(m.seen) {
 			m.seen = s.Updated
 			for _, id := range s.Changed {
@@ -172,10 +196,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flash = string(msg)
 		return m, nil
 	case tea.KeyPressMsg:
-		if m.filtering {
+		switch {
+		case m.editing:
+			return m.settingsKey(msg)
+		case m.filtering:
 			return m.filterKey(msg)
 		}
 		return m.key(msg)
+	case tea.MouseClickMsg:
+		return m.click(msg)
+	case tea.MouseWheelMsg:
+		if !m.editing && !m.help {
+			switch msg.Button {
+			case tea.MouseWheelUp:
+				m.move(-1)
+			case tea.MouseWheelDown:
+				m.move(1)
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -195,6 +234,10 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.flash = "refreshing"
 	case "?":
 		m.help = !m.help
+	case "s":
+		if m.settings != nil {
+			m.openSettings()
+		}
 	case "/":
 		m.filtering, m.help = true, false
 		return m, m.filter.Focus()
@@ -366,4 +409,165 @@ func (m *Model) scroll() {
 		m.offset = line - h + 1
 	}
 	m.offset = min(m.offset, total-h)
+}
+
+// Frame renders one dark-themed screen of st at w by h, as the program
+// first draws it, with st.Changed marked. For docs and screenshots.
+func Frame(st engine.State, w, h int, loc *time.Location) string {
+	m := Model{
+		loc:     loc,
+		filter:  textinput.New(),
+		st:      newStyles(true),
+		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		changed: map[string]bool{},
+		width:   w,
+		height:  h,
+		state:   st,
+	}
+	for _, id := range st.Changed {
+		m.changed[id] = true
+	}
+	m.rebuild()
+	return m.View().Content
+}
+
+func (m *Model) openSettings() {
+	c := m.settings.Get()
+	m.editing, m.help, m.formErr = true, false, ""
+	m.draftPoll = c.Poll
+	m.ignore.SetValue(strings.Join(c.IgnoreActors, ", "))
+	m.setFocus(0)
+}
+
+func (m *Model) closeSettings() {
+	m.editing = false
+	m.ignore.Blur()
+}
+
+func (m *Model) setFocus(f int) {
+	m.focus = (f + 4) % 4
+	if m.focus == 1 {
+		m.ignore.Focus()
+	} else {
+		m.ignore.Blur()
+	}
+}
+
+// stepPoll moves the draft interval along the offered choices.
+func (m *Model) stepPoll(by int) {
+	choices := pollChoices(m.draftPoll)
+	i := slices.Index(choices, m.draftPoll)
+	m.draftPoll = choices[min(max(i+by, 0), len(choices)-1)]
+}
+
+func pollChoices(current time.Duration) []time.Duration {
+	choices := slices.Clone(config.PollChoices)
+	if !slices.Contains(choices, current) {
+		choices = append(choices, current)
+		slices.Sort(choices)
+	}
+	return choices
+}
+
+func (m *Model) saveSettings() {
+	logins := strings.FieldsFunc(m.ignore.Value(), func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	if err := m.settings.Set(config.Config{Poll: m.draftPoll, IgnoreActors: logins}); err != nil {
+		m.formErr = err.Error()
+		return
+	}
+	m.closeSettings()
+	m.flash = "settings saved"
+}
+
+func (m Model) settingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.closeSettings()
+		return m, nil
+	case "tab", "down":
+		m.setFocus(m.focus + 1)
+		return m, nil
+	case "shift+tab", "up":
+		m.setFocus(m.focus - 1)
+		return m, nil
+	case "enter":
+		if m.focus == 3 {
+			m.closeSettings()
+		} else {
+			m.saveSettings()
+		}
+		return m, nil
+	case "left", "h":
+		if m.focus == 0 {
+			m.stepPoll(-1)
+			return m, nil
+		}
+	case "right", "l":
+		if m.focus == 0 {
+			m.stepPoll(1)
+			return m, nil
+		}
+	}
+	if m.focus != 1 {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.ignore, cmd = m.ignore.Update(msg)
+	return m, cmd
+}
+
+func (m Model) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if msg.Button != tea.MouseLeft {
+		return m, nil
+	}
+	x, y := msg.X, msg.Y
+	if m.editing {
+		f := m.form()
+		switch {
+		case f.prev.hit(x, y):
+			m.setFocus(0)
+			m.stepPoll(-1)
+		case f.next.hit(x, y):
+			m.setFocus(0)
+			m.stepPoll(1)
+		case f.field.hit(x, y):
+			m.setFocus(1)
+		case f.save.hit(x, y):
+			m.saveSettings()
+		case f.cancel.hit(x, y):
+			m.closeSettings()
+		}
+		return m, nil
+	}
+	if m.settings != nil && m.headerButton().hit(x, y) {
+		m.openSettings()
+		return m, nil
+	}
+	if m.help || m.filtering || !m.state.Loaded {
+		return m, nil
+	}
+	if l := m.layout(); y >= 1 && y < 1+l.listHeight && x < l.listWidth {
+		if i, ok := m.rowAt(m.offset + y - 1); ok {
+			m.cursor = i
+			m.remember()
+			m.scroll()
+		}
+	}
+	return m, nil
+}
+
+// rowAt maps a list line to the row drawn there, if a row is.
+func (m Model) rowAt(line int) (int, bool) {
+	n, i := 0, 0
+	for _, g := range m.groups {
+		n++ // the section badge
+		for range g.Rows {
+			if line == n {
+				return i, true
+			}
+			n++
+			i++
+		}
+	}
+	return 0, false
 }

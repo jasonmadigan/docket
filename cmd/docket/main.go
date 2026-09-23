@@ -80,7 +80,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if flags.NArg() > 0 {
 		return fmt.Errorf("unexpected arguments: %s", strings.Join(flags.Args(), " "))
 	}
-	cfg, err := loadConfig(*poll)
+	path, err := config.Path()
+	if err != nil {
+		return err
+	}
+	cfg, err := loadConfig(path, *poll)
 	if err != nil {
 		return err
 	}
@@ -89,22 +93,22 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	eng := engine.New(fetch.New(client), engine.Config{Poll: cfg.Poll, Ignore: cfg.IgnoreActors})
-	switch cmd {
-	case "dump":
+	if cmd == "dump" {
 		return printOnce(ctx, eng, stdout, stderr, *asJSON)
-	case "web":
+	}
+	store := config.NewStore(path, cfg, func(c config.Config) { eng.Configure(c.Poll, c.IgnoreActors) })
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go store.Watch(ctx, 2*time.Second)
+	if cmd == "web" {
 		return serve(ctx, eng, func(ctx context.Context) error {
-			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr})
+			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr, Settings: store})
 		})
 	}
-	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng) })
+	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng, store) })
 }
 
-func loadConfig(poll time.Duration) (config.Config, error) {
-	path, err := config.Path()
-	if err != nil {
-		return config.Config{}, err
-	}
+func loadConfig(path string, poll time.Duration) (config.Config, error) {
 	cfg, err := config.Load(path)
 	if err != nil {
 		return config.Config{}, err

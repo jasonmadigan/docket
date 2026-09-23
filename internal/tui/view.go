@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jasonmadigan/docket/internal/browser"
+	"github.com/jasonmadigan/docket/internal/config"
 	"github.com/jasonmadigan/docket/internal/model"
 )
 
@@ -18,7 +19,7 @@ const (
 	minTitle = 20
 )
 
-const hints = "j/k move · enter open · c check · i issues · / filter · r refresh · ? help"
+const hints = "j/k move · enter open · c check · i issues · / filter · r refresh"
 
 var keyHelp = [][2]string{
 	{"j k ↑ ↓", "move"},
@@ -26,6 +27,7 @@ var keyHelp = [][2]string{
 	{"c", "open first failing check"},
 	{"i", "open linked issues"},
 	{"r", "refresh now"},
+	{"s", "settings"},
 	{"/", "filter; esc clears"},
 	{"?", "close help"},
 	{"q", "quit"},
@@ -60,6 +62,7 @@ func (m Model) layout() layout {
 func (m Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "docket"
 	if m.state.Loaded {
 		v.WindowTitle = fmt.Sprintf("docket (%d)", m.state.Snapshot.Count)
@@ -84,6 +87,8 @@ func (m Model) render() string {
 func (m Model) body(h int) string {
 	l := m.layout()
 	switch {
+	case m.editing:
+		return m.settingsPanel(h)
 	case m.help:
 		return m.fit(m.helpLines(), m.width, h)
 	case !m.state.Loaded:
@@ -145,6 +150,9 @@ func (m Model) header() string {
 	if s.Loaded || s.Err != nil {
 		right = plain.Render(m.activity(bar) + " ")
 	}
+	if m.settings != nil {
+		right += plain.Render(" ") + bar(m.st.link).Render("settings") + plain.Render(" ")
+	}
 	for _, left := range []string{brand + who + counts, brand + who, brand} {
 		if room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right); room >= 1 {
 			return left + plain.Render(strings.Repeat(" ", room)) + right
@@ -189,7 +197,11 @@ func (m Model) footer() string {
 	}
 	left := strings.Join(parts, " · ")
 	if left == "" {
-		left = m.st.faint.Render(hints)
+		h := hints
+		if m.settings != nil {
+			h += " · s settings"
+		}
+		left = m.st.faint.Render(h + " · ? help")
 	}
 	var right string
 	if b := m.state.Budget; b.Limit > 0 {
@@ -445,4 +457,73 @@ func tagList(tags []model.Tag) string {
 		names[i] = string(t)
 	}
 	return strings.Join(names, ",")
+}
+
+type zone struct{ x, y, w int }
+
+func (z zone) hit(x, y int) bool { return y == z.y && x >= z.x && x < z.x+z.w }
+
+// headerButton is where the header draws its settings link.
+func (m Model) headerButton() zone {
+	if m.settings == nil {
+		return zone{}
+	}
+	return zone{x: m.width - len("settings") - 1, y: 0, w: len("settings")}
+}
+
+const labelW = 18
+
+type form struct {
+	x, y, w, h                      int // the box on screen
+	prev, next, field, save, cancel zone
+}
+
+// form lays out the settings box. settingsPanel draws from the same
+// numbers, so clicks land on what they look like they land on.
+func (m Model) form() form {
+	f := form{w: max(min(72, m.width-2), 0), h: 13}
+	f.x = max((m.width-f.w)/2, 0)
+	f.y = 1 + max((m.bodyHeight()-f.h)/2, 0)
+	left, line := f.x+2, func(i int) int { return f.y + 1 + i }
+	value := config.FormatPoll(m.draftPoll)
+	f.prev = zone{left + labelW, line(1), 1}
+	f.next = zone{left + labelW + 2 + len(value) + 1, line(1), 1}
+	f.field = zone{left + labelW, line(3), max(f.w-4-labelW, 1)}
+	f.save = zone{left, line(6), len("[ Save ]")}
+	f.cancel = zone{left + len("[ Save ]  "), line(6), len("[ Cancel ]")}
+	return f
+}
+
+func (m Model) settingsPanel(h int) string {
+	f := m.form()
+	focused := func(i int, s string) string {
+		if m.focus == i {
+			return m.st.section.Render(s)
+		}
+		return s
+	}
+	label := func(s string) string { return m.st.bold.Render(s) + strings.Repeat(" ", labelW-len(s)) }
+	field := m.ignore
+	field.SetWidth(max(f.field.w-1, 1))
+	lines := []string{
+		"",
+		label("Refresh every") + m.st.accent.Render("‹") + " " + focused(0, config.FormatPoll(m.draftPoll)) + " " + m.st.accent.Render("›"),
+		"",
+		label("Ignore accounts") + field.View(),
+		strings.Repeat(" ", labelW) + m.st.faint.Render("bots and CI users, comma separated"),
+		"",
+		focused(2, "[ Save ]") + "  " + focused(3, "[ Cancel ]"),
+		"",
+		m.st.faint.Render("saved to " + m.settings.Path()),
+		m.st.kinds[model.Bad].Render(m.formErr),
+		m.st.faint.Render("tab next · ← → change · enter save · esc cancel"),
+	}
+	box := strings.Split(m.box(m.st.header.Render("Settings"), lines, f.w, f.h), "\n")
+	out := make([]string, h)
+	for i := range out {
+		if j := 1 + i - f.y; j >= 0 && j < len(box) {
+			out[i] = strings.Repeat(" ", f.x) + box[j]
+		}
+	}
+	return m.fit(out, m.width, h)
 }

@@ -5,13 +5,13 @@
   c         open first failing check
   i         open linked issues
   r         refresh now
+  s         settings
   /         filter; esc clears
   ?         close help
   q         quit
 
   Warnings
   Resource protected by organization SAML enforcement.
-
 
 
 

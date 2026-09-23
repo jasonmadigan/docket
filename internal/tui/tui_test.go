@@ -64,6 +64,12 @@ func key(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyDown}
 	case "up":
 		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	}
 	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 }
@@ -475,4 +481,11 @@ func busyFixture() engine.State {
 	st.Busy = true
 	st.Progress.Phase, st.Progress.Done, st.Progress.Total = "details", 10, 24
 	return st
+}
+
+func TestFrameDrawsWhatTheProgramDoes(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	if got, want := ansi.Strip(Frame(fixture.State(), 140, 30, time.UTC)), hs.screen(); got != want {
+		t.Fatalf("frame differs from the live view:\n%s\n---\n%s", got, want)
+	}
 }
