@@ -95,10 +95,20 @@ func checkSize(t *testing.T, screen string, w, h int) {
 		t.Fatalf("%d lines, want %d", len(lines), h)
 	}
 	for i, line := range lines {
-		if got := ansi.StringWidth(line); got > w {
+		if got := ansi.StringWidthWc(line); got > w {
 			t.Fatalf("line %d is %d wide, over %d: %q", i, got, w, line)
 		}
 	}
+}
+
+// goldenText drops a screen's padding so golden files survive whitespace
+// fixers; checkSize has already measured the padded screen.
+func goldenText(screen string) string {
+	lines := strings.Split(screen, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " ")
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func TestViewGolden(t *testing.T) {
@@ -124,7 +134,7 @@ func TestViewGolden(t *testing.T) {
 			hs.press(c.keys...)
 			screen := hs.screen()
 			checkSize(t, screen, c.w, c.h)
-			golden.RequireEqual(t, screen)
+			golden.RequireEqual(t, goldenText(screen))
 		})
 	}
 }
@@ -314,4 +324,51 @@ func TestNothingOpenHasNoDetailPane(t *testing.T) {
 	if screen := hs.screen(); strings.Contains(screen, "─") {
 		t.Fatalf("empty detail pane drawn:\n%s", screen)
 	}
+}
+
+func TestErrorStatusKeepsLastSuccess(t *testing.T) {
+	hs := newHarness(t, fixture.Failed(), 140, 30)
+	if got := lastLine(hs.screen()); !strings.HasPrefix(got, "updated 12:00 · retry 12:02 · fetch failed: ") {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestFlashClearsOnNewState(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	hs.press("r")
+	hs.send(stateMsg(fixture.State()))
+	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "5 PRs") {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestFlashNeverHidesErrors(t *testing.T) {
+	hs := newHarness(t, fixture.Failed(), 140, 30)
+	hs.press("c")
+	got := lastLine(hs.screen())
+	if !strings.Contains(got, "no failing check to open") || !strings.Contains(got, "fetch failed") {
+		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestEmojiRowsMatchTheRenderer(t *testing.T) {
+	prs := fixture.PRs()
+	prs[0].Title = "⚠️ fix the warning banner"
+	prs[1].Title = "\U0001f469‍\U0001f4bb pairing notes"
+	st := fixture.State()
+	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	exact := func(t *testing.T, screen string, width func(string) int, w int) {
+		t.Helper()
+		lines := strings.Split(screen, "\n")
+		for i, line := range lines[:len(lines)-1] {
+			if got := width(line); got != w {
+				t.Fatalf("line %d is %d cells, want %d: %q", i, got, w, line)
+			}
+		}
+	}
+	hs := newHarness(t, st, 90, 20)
+	hs.press("j")
+	exact(t, hs.screen(), ansi.StringWidthWc, 90)
+	hs.send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet})
+	exact(t, hs.screen(), ansi.StringWidth, 90)
 }

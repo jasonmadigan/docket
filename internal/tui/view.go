@@ -72,20 +72,23 @@ func (m Model) render() string {
 	var view string
 	switch {
 	case m.help:
-		view = fit(m.helpLines(), m.width, body)
+		view = m.fit(m.helpLines(), m.width, body)
 	case !m.state.Loaded:
 		text := "fetching…"
 		if m.state.Err != nil {
 			text = "no data yet"
 		}
 		placed := lipgloss.Place(m.width, body, lipgloss.Center, lipgloss.Center, m.st.faint.Render(text))
-		view = fit(strings.Split(placed, "\n"), m.width, body)
+		view = m.fit(strings.Split(placed, "\n"), m.width, body)
 	case l.wide:
-		divider := make([]string, body)
-		for i := range divider {
-			divider[i] = m.st.faint.Render(" │ ")
+		list := strings.Split(m.list(l), "\n")
+		detail := strings.Split(m.detail(l.detailWidth, l.detailHeight), "\n")
+		divider := m.st.faint.Render(" │ ")
+		rows := make([]string, body)
+		for i := range rows {
+			rows[i] = list[i] + divider + detail[i]
 		}
-		view = lipgloss.JoinHorizontal(lipgloss.Top, m.list(l), strings.Join(divider, "\n"), m.detail(l.detailWidth, l.detailHeight))
+		view = strings.Join(rows, "\n")
 	case l.detailHeight == 0:
 		view = m.list(l)
 	default:
@@ -107,11 +110,11 @@ func (m Model) list(l layout) string {
 		all := m.listLines(l.listWidth)
 		lines = all[min(m.offset, len(all)):]
 	}
-	return fit(lines, l.listWidth, l.listHeight)
+	return m.fit(lines, l.listWidth, l.listHeight)
 }
 
 func (m Model) listLines(width int) []string {
-	cols := fitColumns(width, m.rows, m.state.Snapshot)
+	cols := fitColumns(m.method, width, m.rows, m.state.Snapshot)
 	var lines []string
 	i := 0
 	for _, g := range m.groups {
@@ -130,14 +133,14 @@ type columns struct {
 
 // fitColumns drops author, review, age, ref and ci in that order until the
 // title gets minTitle, then squeezes tags.
-func fitColumns(width int, rows []model.Row, snap model.Snapshot) columns {
+func fitColumns(method ansi.Method, width int, rows []model.Row, snap model.Snapshot) columns {
 	c := columns{ci: 1, age: 4, review: 8}
 	for _, r := range rows {
-		c.ref = max(c.ref, ansi.StringWidth(r.PR.Ref()))
+		c.ref = max(c.ref, method.StringWidth(r.PR.Ref()))
 		if !snap.IsMe(r.PR.Author) {
-			c.author = max(c.author, ansi.StringWidth(r.PR.Author.Login))
+			c.author = max(c.author, method.StringWidth(r.PR.Author.Login))
 		}
-		c.tags = max(c.tags, ansi.StringWidth(tagList(r.PR.Tags)))
+		c.tags = max(c.tags, method.StringWidth(tagList(r.PR.Tags)))
 	}
 	c.ref, c.author, c.tags = min(c.ref, 30), min(c.author, 14), min(c.tags, 24)
 	for _, drop := range []*int{&c.author, &c.review, &c.age, &c.ref, &c.ci} {
@@ -185,12 +188,12 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 		}
 	}
 	lead(ciGlyph[r.CI], c.ci, m.st.ci[r.CI])
-	lead(padLeft(snap.Since(r.Activity), c.age), c.age, m.st.faint)
-	lead(pad(r.PR.Ref(), c.ref), c.ref, m.st.faint)
-	b.WriteString(paint(linked(lipgloss.NewStyle(), r.PR.URL)).Render(pad(r.PR.Title, c.title)))
+	lead(m.padLeft(snap.Since(r.Activity), c.age), c.age, m.st.faint)
+	lead(m.pad(r.PR.Ref(), c.ref), c.ref, m.st.faint)
+	b.WriteString(paint(linked(lipgloss.NewStyle(), r.PR.URL)).Render(m.pad(r.PR.Title, c.title)))
 	trail := func(text string, width int, s lipgloss.Style) {
 		if width > 0 {
-			b.WriteString(gap + paint(s).Render(pad(text, width)))
+			b.WriteString(gap + paint(s).Render(m.pad(text, width)))
 		}
 	}
 	trail(r.Review, c.review, m.st.review[r.Review])
@@ -206,11 +209,11 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 func (m Model) detail(w, h int) string {
 	r := m.current()
 	if r == nil {
-		return fit(nil, w, h)
+		return m.fit(nil, w, h)
 	}
 	pr := r.PR
 	lines := []string{linked(m.st.bold, pr.URL).Render(pr.Ref())}
-	lines = append(lines, strings.Split(ansi.Wordwrap(pr.Title, w, ""), "\n")...)
+	lines = append(lines, strings.Split(m.method.Wordwrap(pr.Title, w, ""), "\n")...)
 	lines = append(lines, m.st.faint.Render(m.state.Snapshot.Meta(*r)), m.st.accent.Render(strings.Join(r.Labels(), ", ")))
 	block := func(title string, body []string) {
 		if len(body) > 0 {
@@ -233,7 +236,7 @@ func (m Model) detail(w, h int) string {
 	block("Failing checks", checks)
 	block("Reviewers", reviewers)
 	block("Linked issues", issues)
-	return fit(lines, w, h)
+	return m.fit(lines, w, h)
 }
 
 func (m Model) facts(lines []model.Line) []string {
@@ -255,24 +258,32 @@ func linked(s lipgloss.Style, url string) lipgloss.Style {
 
 func (m Model) status() string {
 	if m.filtering {
-		return fit([]string{m.filter.View()}, m.width, 1)
+		return m.fit([]string{m.filter.View()}, m.width, 1)
 	}
 	left := m.statusText()
 	right := m.st.faint.Render(m.budgetText())
-	room := m.width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right)
 	if room < 1 {
-		return ansi.Truncate(left, m.width, "…")
+		return m.method.Truncate(left, m.width, "…")
 	}
 	return left + strings.Repeat(" ", room) + right
 }
 
 func (m Model) statusText() string {
+	if m.flash != "" {
+		return m.flash + " · " + m.stateText()
+	}
+	return m.stateText()
+}
+
+func (m Model) stateText() string {
 	s := m.state
+	bad := m.st.kinds[model.Bad]
 	switch {
-	case m.flash != "":
-		return m.flash
+	case s.Err != nil && s.Loaded:
+		return bad.Render(fmt.Sprintf("updated %s · retry %s · fetch failed: %v", m.clock(s.Updated), m.clock(s.Next), s.Err))
 	case s.Err != nil:
-		return m.st.kinds[model.Bad].Render(fmt.Sprintf("fetch failed: %v · retry %s", s.Err, m.clock(s.Next)))
+		return bad.Render(fmt.Sprintf("retry %s · fetch failed: %v", m.clock(s.Next), s.Err))
 	case !s.Loaded:
 		return "fetching…"
 	}
@@ -316,26 +327,26 @@ func (m Model) helpLines() []string {
 }
 
 // fit pads or clips lines to exactly w columns by h rows.
-func fit(lines []string, w, h int) string {
+func (m Model) fit(lines []string, w, h int) string {
 	out := make([]string, h)
 	for i := range out {
 		var line string
 		if i < len(lines) {
-			line = ansi.Truncate(lines[i], w, "")
+			line = m.method.Truncate(lines[i], w, "")
 		}
-		out[i] = line + strings.Repeat(" ", max(w-ansi.StringWidth(line), 0))
+		out[i] = line + strings.Repeat(" ", max(w-m.method.StringWidth(line), 0))
 	}
 	return strings.Join(out, "\n")
 }
 
-func pad(s string, w int) string {
-	s = ansi.Truncate(s, w, "…")
-	return s + strings.Repeat(" ", max(w-ansi.StringWidth(s), 0))
+func (m Model) pad(s string, w int) string {
+	s = m.method.Truncate(s, w, "…")
+	return s + strings.Repeat(" ", max(w-m.method.StringWidth(s), 0))
 }
 
-func padLeft(s string, w int) string {
-	s = ansi.Truncate(s, w, "…")
-	return strings.Repeat(" ", max(w-ansi.StringWidth(s), 0)) + s
+func (m Model) padLeft(s string, w int) string {
+	s = m.method.Truncate(s, w, "…")
+	return strings.Repeat(" ", max(w-m.method.StringWidth(s), 0)) + s
 }
 
 func tagList(tags []model.Tag) string {

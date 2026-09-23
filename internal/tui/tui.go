@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jasonmadigan/docket/internal/browser"
 	"github.com/jasonmadigan/docket/internal/engine"
@@ -49,6 +50,9 @@ type Model struct {
 	help      bool
 	flash     string
 	st        styles
+	// measure as the renderer does: wcwidth until the terminal reports
+	// unicode core (mode 2027), then graphemes
+	method ansi.Method
 }
 
 func Run(ctx context.Context, eng Engine) error {
@@ -120,8 +124,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case stateMsg:
 		m.state = engine.State(msg)
+		m.flash = ""
 		m.rebuild()
 		return m, wait(m.states)
+	case tea.ModeReportMsg:
+		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) {
+			m.method = ansi.GraphemeWidth
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.filter.SetWidth(max(msg.Width-4, 1))

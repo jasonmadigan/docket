@@ -1,30 +1,30 @@
-  Mine (2)                                                                           │ acme/widgets#42                                      
-  ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Fix reconcile loop when the gateway disappears       
-▌ ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ opened 5d ago · touched 2d ago                       
-  Requested (2)                                                                      │ author                                               
-  ✓   9d acme/gateway#1188 Bump Envoy to 1.37        review   bob   team             │                                                      
-  ●   1d acme/gateway#1203 Support weighted backends review   alice review,commented │ What's left                                          
-  Mentioned (1)                                                                      │   ✗ CI failing: e2e                                  
-  ·   1y acme/docs#88      Rewrite the getting star…          erin  mentioned        │   ✗ changes requested by carol                       
-                                                                                     │   ○ 2 unresolved threads                             
-                                                                                     │                                                      
-                                                                                     │ You                                                  
-                                                                                     │   ○ 1 reply since yours                              
-                                                                                     │                                                      
-                                                                                     │ Failing checks                                       
-                                                                                     │   ✗ e2e                                              
-                                                                                     │                                                      
-                                                                                     │ Reviewers                                            
-                                                                                     │   carol requested changes                            
-                                                                                     │                                                      
-                                                                                     │ Linked issues                                        
-                                                                                     │   acme/widgets#7 Loop never ends open                
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
-                                                                                     │                                                      
+  Mine (2)                                                                           │ acme/widgets#42
+  ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Fix reconcile loop when the gateway disappears
+▌ ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ opened 5d ago · touched 2d ago
+  Requested (2)                                                                      │ author
+  ✓   9d acme/gateway#1188 Bump Envoy to 1.37        review   bob   team             │
+  ●   1d acme/gateway#1203 Support weighted backends review   alice review,commented │ What's left
+  Mentioned (1)                                                                      │   ✗ CI failing: e2e
+  ·   1y acme/docs#88      Rewrite the getting star…          erin  mentioned        │   ✗ changes requested by carol
+                                                                                     │   ○ 2 unresolved threads
+                                                                                     │
+                                                                                     │ You
+                                                                                     │   ○ 1 reply since yours
+                                                                                     │
+                                                                                     │ Failing checks
+                                                                                     │   ✗ e2e
+                                                                                     │
+                                                                                     │ Reviewers
+                                                                                     │   carol requested changes
+                                                                                     │
+                                                                                     │ Linked issues
+                                                                                     │   acme/widgets#7 Loop never ends open
+                                                                                     │
+                                                                                     │
+                                                                                     │
+                                                                                     │
+                                                                                     │
+                                                                                     │
+                                                                                     │
+                                                                                     │
 5 PRs · updated 12:00 · next 12:01                                                                                 budget 4812/5000 · ? help

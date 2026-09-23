@@ -75,7 +75,7 @@ func TestSectionsGolden(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	golden.RequireEqual(t, rec.Body.String())
+	golden.RequireEqual(t, rec.Body.String()+"\n")
 }
 
 func TestPageWrapsSections(t *testing.T) {

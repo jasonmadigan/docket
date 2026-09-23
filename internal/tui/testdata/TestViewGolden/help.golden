@@ -1,20 +1,20 @@
-  Keys                                                                                    
-  j k ↑ ↓   move                                                                          
-  enter     open PR                                                                       
-  c         open first failing check                                                      
-  i         open linked issues                                                            
-  r         refresh now                                                                   
-  /         filter; esc clears                                                            
-  ?         close help                                                                    
-  q         quit                                                                          
-                                                                                          
-  Warnings                                                                                
-  Resource protected by organization SAML enforcement.                                    
-                                                                                          
-                                                                                          
-                                                                                          
-                                                                                          
-                                                                                          
-                                                                                          
-                                                                                          
-fetch failed: Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no …
+  Keys
+  j k ↑ ↓   move
+  enter     open PR
+  c         open first failing check
+  i         open linked issues
+  r         refresh now
+  /         filter; esc clears
+  ?         close help
+  q         quit
+
+  Warnings
+  Resource protected by organization SAML enforcement.
+
+
+
+
+
+
+
+updated 12:00 · retry 12:02 · fetch failed: Post "https://api.github.com/graphql": dial t…
