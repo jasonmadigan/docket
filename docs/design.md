@@ -1,6 +1,6 @@
 # docket
 
-Design, approved 23 September 2026.
+Design notes, September 2026.
 
 An always-open view of every open GitHub pull request I'm involved in: state, CI, what's left, linked issues, time since anyone touched it. A terminal UI and a web page over one engine, run locally on whichever machine I'm on.
 
@@ -8,13 +8,13 @@ An always-open view of every open GitHub pull request I'm involved in: state, CI
 
 - Open PR: listed. Closed or merged: gone.
 - No stale threshold. Nothing is demoted for being old: every row shows its age, and the longest-neglected sort first so they get noticed rather than die.
-- No dismiss, snooze, mute or other marks. Nothing persisted, nothing to sync between machines.
+- No dismiss, snooze, mute or other marks. The only thing written to disk is settings.
 - github.com only, every org, no allowlist.
 - Read-only. The only action is opening things in the browser.
 - TUI and web both ship. Each runs the engine in-process. With no state, two copies running at once can't conflict; they only double a cheap poll.
 - Go, single binary `docket`, auth borrowed from `gh`.
 - macOS 26 on Apple silicon is the main platform, in Terminal.app or iTerm2. Linux works too, including over SSH.
-- Not a `gh` extension. Extensions live under `~/.local/share/gh`, which home-config syncs, so a per-arch binary would reach hosts it can't run on.
+- A plain binary rather than a `gh` extension; `go install` builds one per machine.
 
 ## Involvement
 
@@ -45,7 +45,7 @@ Row: `owner/repo#n`, title, author when not me, tags, CI, review decision, age o
 
 Detail (TUI pane, expandable web row): what's left, failing checks with links, reviewers and their states, linked issues with their state.
 
-Linked issues come from `closingIssuesReferences`: closing keywords plus issues linked in the sidebar. None of the 23 PRs open today cites a Jira key, so Jira is out.
+Linked issues come from `closingIssuesReferences`: closing keywords plus issues linked in the sidebar. Jira is out of scope.
 
 ### What's left
 
@@ -118,7 +118,7 @@ No change detection. Refetching everything is cheap at this volume, and several 
 
 At startup and hourly: `viewer { login }` and my team memberships, to name the team a request went to.
 
-Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: a poll of 24 PRs costs 4 to 5 points and takes about 15s, so about 300 points an hour at the 60s default, from the 5,000 shared by everything using my token, agents included. Detail goes 10 PRs a request: 20 took about 7s and drew intermittent 502s from GitHub's query time limit. Each request times out at 30s, a whole poll at 2 minutes. `mergeStateStatus` needs no preview header.
+Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: a poll of 24 PRs costs 4 to 5 points and takes about 15s, so about 300 points an hour at the 60s default, from the 5,000 an hour the token shares with everything else using it. Detail goes 10 PRs a request: 20 took about 7s and drew intermittent 502s from GitHub's query time limit. Each request times out at 30s, a whole poll at 2 minutes. `mergeStateStatus` needs no preview header.
 
 ### Errors
 
@@ -142,7 +142,6 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
-`dump` is how build step 1 gets checked, before either view exists.
 
 ### TUI
 
@@ -150,17 +149,19 @@ Full screen. A header bar carries my login, the open count and a count per secti
 
 | Key | Action |
 |-|-|
-| `j` `k`, arrows | move |
+| `j` `k`, arrows, wheel | move |
+| click | select a row; work the settings panel |
 | `enter` | open PR |
 | `c` | open first failing check |
 | `i` | open linked issues |
 | `r` | refresh now |
+| `s`, or `settings` in the header | settings |
 | `/` | filter by text |
 | `esc` | clear the filter, close help |
 | `?` | help |
 | `q` | quit |
 
-Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Over SSH, where neither reaches my screen, it copies the URL with OSC 52 instead. Colours follow the terminal's reported background.
+Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Over SSH, where neither reaches the screen in front of you, it copies the URL with OSC 52 instead. Colours follow the terminal's reported background.
 
 ### Web
 
@@ -171,38 +172,35 @@ Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Ov
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
 - Header: login, open count, a pill per section, and a spinner with the poll's step while one runs; each step arrives over the event stream.
 - Rows that changed in the latest poll flash and fade.
+- Settings in a dialog, outside the swapped region so a refresh never closes it. `POST /settings` takes JSON only and refuses requests a browser marks cross-site or from another origin, so no other page can change them.
 - Tab title carries the count: `docket (23)`.
 - Light and dark via `prefers-color-scheme`.
 - `--open` launches the browser. On another host, `ssh -L 7788:127.0.0.1:7788` reaches it.
 
 ## Config
 
-Optional `~/.config/docket/config.toml`. home-config syncs it, which suits preferences. Flags override it.
+Optional `~/.config/docket/config.toml` (`$XDG_CONFIG_HOME` honoured). The settings screens in both views write it, atomically, and a running docket checks it every couple of seconds so edits by hand or by another copy apply without a restart. `--poll` overrides it at start.
 
 ```toml
-poll = "60s"
-ignore_actors = []
+poll = "1m"
+ignore_actors = ["codecov", "openshift-ci-robot"]
 ```
+
+`poll` runs from 10s to 1h; the screens offer 30s, 1m, 2m, 5m and 10m. `ignore_actors` must be GitHub logins.
 
 ## Install
 
-`go install ./cmd/docket` on each host. The binary lands in `~/go/bin`, which home-config doesn't sync. Nothing gets built inside the repo, since `~/Work` syncs between hosts: `go build ./...`, never `go build ./cmd/docket`.
+`go install github.com/jasonmadigan/docket/cmd/docket@latest`, or `go install ./cmd/docket` from a checkout.
 
 ## Testing
 
 - `model`: table tests over hand-built `model.PR` values.
 - `fetch`: fake transport fed synthetic JSON shaped like API responses. No recorded private-repo data in the tree.
 - `engine`: fake fetcher. Snapshot fan-out, backoff, partial errors, budget stretching.
-- `fetch` live test behind `-tags live`, on my gh auth. Asserts the queries run and logs their cost.
+- `fetch` live test behind `-tags live`, using gh's login; `DOCKET_LIVE_VIA=gh` sends the queries through the gh CLI for when a firewall holds the test binary. Asserts the queries run and logs their cost.
 - `web`: `httptest` and golden HTML, including the `Host` check.
 - `tui`: `teatest` golden frames from a fixed snapshot.
 
-## Build order
-
-1. `gh`, `fetch`, `model`, `docket dump`, checked against the live API.
-2. `engine`: polling, backoff, budget.
-3. TUI.
-4. Web.
 
 ## Alternatives considered
 

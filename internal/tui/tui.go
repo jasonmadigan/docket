@@ -411,26 +411,6 @@ func (m *Model) scroll() {
 	m.offset = min(m.offset, total-h)
 }
 
-// Frame renders one dark-themed screen of st at w by h, as the program
-// first draws it, with st.Changed marked. For docs and screenshots.
-func Frame(st engine.State, w, h int, loc *time.Location) string {
-	m := Model{
-		loc:     loc,
-		filter:  textinput.New(),
-		st:      newStyles(true),
-		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
-		changed: map[string]bool{},
-		width:   w,
-		height:  h,
-		state:   st,
-	}
-	for _, id := range st.Changed {
-		m.changed[id] = true
-	}
-	m.rebuild()
-	return m.View().Content
-}
-
 func (m *Model) openSettings() {
 	c := m.settings.Get()
 	m.editing, m.help, m.formErr = true, false, ""

@@ -482,10 +482,3 @@ func busyFixture() engine.State {
 	st.Progress.Phase, st.Progress.Done, st.Progress.Total = "details", 10, 24
 	return st
 }
-
-func TestFrameDrawsWhatTheProgramDoes(t *testing.T) {
-	hs := newHarness(t, fixture.State(), 140, 30)
-	if got, want := ansi.Strip(Frame(fixture.State(), 140, 30, time.UTC)), hs.screen(); got != want {
-		t.Fatalf("frame differs from the live view:\n%s\n---\n%s", got, want)
-	}
-}

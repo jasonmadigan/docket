@@ -127,7 +127,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestStaticAssets(t *testing.T) {
 	h := handler(t, newFake(fixture.State()))
-	for path, kind := range map[string]string{"/static/app.js": "javascript", "/static/style.css": "text/css"} {
+	for path, kind := range map[string]string{"/static/app.js": "javascript", "/static/style.css": "text/css", "/static/favicon.svg": "image/svg+xml"} {
 		rec := get(t, h, "localhost", path)
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), kind) {
 			t.Errorf("%s: %d %q", path, rec.Code, rec.Header().Get("Content-Type"))
