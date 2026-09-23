@@ -14,7 +14,7 @@ import (
 
 type Source interface {
 	Viewer(ctx context.Context) (fetch.Viewer, fetch.Meta, error)
-	Fetch(ctx context.Context, login string) (fetch.Result, error)
+	Fetch(ctx context.Context, login string, progress func(fetch.Progress)) (fetch.Result, error)
 }
 
 type Config struct {
@@ -34,6 +34,9 @@ type State struct {
 	Budget   gh.Budget
 	Err      error // the last poll's; nil once one succeeds
 	Warnings []string
+	Busy     bool
+	Progress fetch.Progress
+	Changed  []string // prs new or different in the latest poll; none after the first
 }
 
 type Engine struct {
@@ -51,6 +54,7 @@ type Engine struct {
 	viewerWarnings []string
 	failures       int
 	limited        time.Time
+	prints         map[string]string // row fingerprints from the last poll
 }
 
 func New(src Source, cfg Config) *Engine {
@@ -159,7 +163,13 @@ func (e *Engine) tick(ctx context.Context) (time.Time, error) {
 func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 	ctx, cancel := context.WithTimeout(ctx, e.cfg.Timeout)
 	defer cancel()
+	busy := func(p fetch.Progress) {
+		s := *st
+		s.Busy, s.Progress, s.Changed = true, p, nil
+		e.publish(s)
+	}
 	if e.viewer.Login == "" || now.Sub(e.viewerAt) >= e.cfg.ViewerEvery {
+		busy(fetch.Progress{Phase: "checking account"})
 		v, meta, err := e.src.Viewer(ctx)
 		if err != nil {
 			return err
@@ -167,7 +177,7 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 		e.viewer, e.viewerAt, e.viewerWarnings = v, now, meta.Warnings
 		keepBudget(st, meta.Budget)
 	}
-	res, err := e.src.Fetch(ctx, e.viewer.Login)
+	res, err := e.src.Fetch(ctx, e.viewer.Login, busy)
 	if err != nil {
 		return err
 	}
@@ -175,6 +185,7 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 	st.Snapshot = model.Build(res.PRs, model.Params{
 		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: e.cfg.Ignore, Now: now,
 	})
+	st.Changed = e.changed(st.Snapshot)
 	st.Loaded = true
 	st.Updated = now
 	st.Warnings = slices.Concat(e.viewerWarnings, res.Warnings)
@@ -226,4 +237,22 @@ func (e *Engine) publish(st State) {
 		}
 		ch <- st
 	}
+}
+
+// changed lists prs that are new or look different since the last poll.
+// The first poll is the baseline and reports none.
+func (e *Engine) changed(s model.Snapshot) []string {
+	prints := map[string]string{}
+	var out []string
+	for _, sec := range s.Sections {
+		for _, r := range sec.Rows {
+			fp := r.Fingerprint()
+			prints[r.PR.ID] = fp
+			if e.prints != nil && e.prints[r.PR.ID] != fp {
+				out = append(out, r.PR.ID)
+			}
+		}
+	}
+	e.prints = prints
+	return out
 }

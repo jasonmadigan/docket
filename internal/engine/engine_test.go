@@ -28,7 +28,8 @@ func (g *gated) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	return fetch.Viewer{Login: "me"}, fetch.Meta{}, nil
 }
 
-func (g *gated) Fetch(ctx context.Context, _ string) (fetch.Result, error) {
+func (g *gated) Fetch(ctx context.Context, _ string, progress func(fetch.Progress)) (fetch.Result, error) {
+	progress(fetch.Progress{Phase: "details", Done: 1, Total: 2})
 	select {
 	case o := <-g.results:
 		return o.res, o.err
@@ -225,7 +226,7 @@ func (s *static) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	return fetch.Viewer{Login: "me"}, fetch.Meta{Warnings: []string{"teams hidden"}}, nil
 }
 
-func (s *static) Fetch(context.Context, string) (fetch.Result, error) {
+func (s *static) Fetch(context.Context, string, func(fetch.Progress)) (fetch.Result, error) {
 	return fetch.Result{PRs: []model.PR{mine("a")}, Meta: fetch.Meta{Warnings: []string{"saml"}}}, nil
 }
 
@@ -273,5 +274,39 @@ func TestSubscribersGetOnlyTheLatest(t *testing.T) {
 func TestPollTimeoutLeavesRoomForManyBatches(t *testing.T) {
 	if got := New(&static{}, Config{}).cfg.Timeout; got < 2*time.Minute {
 		t.Fatalf("poll timeout %v: a live poll of 24 PRs takes about 15s, and each request has its own 30s limit", got)
+	}
+}
+
+func TestPollPublishesProgress(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	s := r.next(t, func(s State) bool { return s.Busy && s.Progress.Phase == "details" })
+	if s.Progress.Done != 1 || s.Progress.Total != 2 || s.Changed != nil {
+		t.Fatalf("busy state = %+v", s)
+	}
+	r.src.give(t, ok(mine("a")))
+	if s := r.next(t, loaded); s.Busy || s.Progress != (fetch.Progress{}) {
+		t.Fatalf("finished state still busy: %+v", s)
+	}
+}
+
+func TestChangedMarksNewAndDifferentPRs(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	r.src.give(t, ok(mine("a"), mine("b")))
+	if s := r.next(t, loaded); len(s.Changed) != 0 {
+		t.Fatalf("first poll is the baseline, changed = %v", s.Changed)
+	}
+	b := mine("b")
+	b.Checks = model.Checks{State: "FAILURE"}
+	r.Refresh()
+	r.src.give(t, ok(mine("a"), b, mine("c")))
+	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Snapshot.Count == 3 })
+	if !reflect.DeepEqual(s.Changed, []string{"b", "c"}) {
+		t.Fatalf("changed = %v, want [b c]", s.Changed)
+	}
+	r.Refresh()
+	r.src.give(t, ok(mine("a"), b, mine("c")))
+	s = r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Updated.Equal(now) && len(s.Changed) == 0 })
+	if s.Snapshot.Count != 3 {
+		t.Fatalf("state = %+v", s)
 	}
 }

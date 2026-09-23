@@ -112,7 +112,7 @@ func TestFetchTagsEachPR(t *testing.T) {
 		})},
 		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"), minimal("PR_C"))},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestFetchFollowsPages(t *testing.T) {
 		{match: matchPage, data: "{" + budget + `, "search": ` + found("PR_B") + "}"},
 		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"))},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestFetchStopsAtTheSearchCap(t *testing.T) {
 		replies = append(replies, reply{match: matchPage, data: "{" + budget + `, "search": ` + more + "}"})
 	}
 	f := &fake{t: t, replies: replies}
-	if _, err := New(f).Fetch(context.Background(), "me"); err != nil {
+	if _, err := New(f).Fetch(context.Background(), "me", nil); err != nil {
 		t.Fatal(err)
 	}
 	f.finished()
@@ -177,7 +177,7 @@ func TestFetchBatchesDetail(t *testing.T) {
 	}}
 	fetcher := New(f)
 	fetcher.batch = 2
-	res, err := fetcher.Fetch(context.Background(), "me")
+	res, err := fetcher.Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestFetchKeepsPartialData(t *testing.T) {
 		{match: matchDetail, data: details(minimal("PR_A"), "null"),
 			err: &gh.PartialError{Messages: []string{"SAML enforcement"}}},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,14 +214,14 @@ func TestFetchKeepsPartialData(t *testing.T) {
 func TestFetchFailsOnError(t *testing.T) {
 	boom := errors.New("boom")
 	f := &fake{t: t, replies: []reply{{match: matchDiscovery, err: boom}}}
-	if _, err := New(f).Fetch(context.Background(), "me"); !errors.Is(err, boom) {
+	if _, err := New(f).Fetch(context.Background(), "me", nil); !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
 	}
 }
 
 func TestFetchNothingOpen(t *testing.T) {
 	f := &fake{t: t, replies: []reply{{match: matchDiscovery, data: discovery(nil)}}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil || len(res.PRs) != 0 {
 		t.Fatalf("got %+v, %v", res, err)
 	}
@@ -277,7 +277,7 @@ func TestFetchFailsWhenResultsAreMissing(t *testing.T) {
 	for name, replies := range cases {
 		t.Run(name, func(t *testing.T) {
 			f := &fake{t: t, replies: replies}
-			if _, err := New(f).Fetch(context.Background(), "me"); err == nil {
+			if _, err := New(f).Fetch(context.Background(), "me", nil); err == nil {
 				t.Fatal("Fetch succeeded without the data it asked for")
 			}
 		})
@@ -299,7 +299,7 @@ func TestFetchDropsPRsClosedSinceSearchIndexed(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A", "PR_B")})},
 		{match: matchDetail, data: details(minimal("PR_A"), merged)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,12 +323,35 @@ func TestFetchDetailsTenAtATime(t *testing.T) {
 		{match: matchDetail, data: details(nodes[10:20]...)},
 		{match: matchDetail, data: details(nodes[20:]...)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.finished()
 	if len(res.PRs) != 24 {
 		t.Fatalf("got %d PRs", len(res.PRs))
+	}
+}
+
+func TestFetchReportsProgress(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A", "PR_B", "PR_C")})},
+		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"))},
+		{match: matchDetail, data: details(minimal("PR_C"))},
+	}}
+	fetcher := New(f)
+	fetcher.batch = 2
+	var got []Progress
+	if _, err := fetcher.Fetch(context.Background(), "me", func(p Progress) { got = append(got, p) }); err != nil {
+		t.Fatal(err)
+	}
+	want := []Progress{
+		{Phase: "finding PRs"},
+		{Phase: "details", Total: 3},
+		{Phase: "details", Done: 2, Total: 3},
+		{Phase: "details", Done: 3, Total: 3},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("progress = %+v, want %+v", got, want)
 	}
 }

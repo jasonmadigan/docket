@@ -45,6 +45,13 @@ type Result struct {
 	Meta
 }
 
+// Progress says how far a fetch has got, for views to show.
+type Progress struct {
+	Phase string `json:"phase"`
+	Done  int    `json:"done,omitempty"`
+	Total int    `json:"total,omitempty"`
+}
+
 func (m *Meta) saw(b gh.Budget) {
 	if b.Limit > 0 {
 		m.Budget = b
@@ -116,13 +123,17 @@ func (f *Fetcher) Viewer(ctx context.Context) (Viewer, Meta, error) {
 	}
 }
 
-func (f *Fetcher) Fetch(ctx context.Context, login string) (Result, error) {
+func (f *Fetcher) Fetch(ctx context.Context, login string, progress func(Progress)) (Result, error) {
+	if progress == nil {
+		progress = func(Progress) {}
+	}
 	var res Result
+	progress(Progress{Phase: "finding PRs"})
 	tags, err := f.discover(ctx, &res.Meta)
 	if err != nil {
 		return Result{}, fmt.Errorf("discovery: %w", err)
 	}
-	if res.PRs, err = f.details(ctx, tags, login, &res.Meta); err != nil {
+	if res.PRs, err = f.details(ctx, tags, login, &res.Meta, progress); err != nil {
 		return Result{}, fmt.Errorf("details: %w", err)
 	}
 	return res, nil
@@ -196,8 +207,10 @@ func (f *Fetcher) page(ctx context.Context, query, after string, meta *Meta) (se
 	return *resp.Search, nil
 }
 
-func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta) ([]model.PR, error) {
+func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta, progress func(Progress)) ([]model.PR, error) {
 	var prs []model.PR
+	done := 0
+	progress(Progress{Phase: "details", Total: len(tags)})
 	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.batch) {
 		var resp struct {
 			RateLimit gh.Budget      `json:"rateLimit"`
@@ -216,6 +229,8 @@ func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, logi
 				prs = append(prs, n.model(tags[n.ID]))
 			}
 		}
+		done += len(ids)
+		progress(Progress{Phase: "details", Done: done, Total: len(tags)})
 	}
 	return prs, nil
 }

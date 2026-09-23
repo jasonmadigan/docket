@@ -20,7 +20,7 @@ func TestDetailBecomesModel(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"review": found("PR_1"), "requested": found("PR_1")})},
 		{match: matchDetail, data: string(raw)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me")
+	res, err := New(f).Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

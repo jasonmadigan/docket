@@ -90,3 +90,26 @@ func TestSnapshotPresentation(t *testing.T) {
 		t.Fatal("an empty actor is not me")
 	}
 }
+
+func TestFingerprintIgnoresTheClock(t *testing.T) {
+	pr := PR{
+		ID: "a", Repo: "acme/a", Number: 1, Author: user("bob"), CreatedAt: at(1), Tags: []Tag{TagReview},
+		Requests: []Reviewer{{Name: "me"}},
+		Timeline: []Event{{Kind: EventReviewRequested, Actor: user("bob"), At: at(1), Target: "me"}},
+	}
+	early := Build([]PR{pr}, Params{Login: "me", Now: at(2)}).Sections[0].Rows[0]
+	late := Build([]PR{pr}, Params{Login: "me", Now: at(90)}).Sections[0].Rows[0]
+	if early.Fingerprint() != late.Fingerprint() {
+		t.Fatalf("time passing changed the fingerprint:\n%q\n%q", early.Fingerprint(), late.Fingerprint())
+	}
+	pr.Checks = Checks{State: "FAILURE"}
+	failing := Build([]PR{pr}, Params{Login: "me", Now: at(2)}).Sections[0].Rows[0]
+	if failing.Fingerprint() == early.Fingerprint() {
+		t.Fatal("a check failing left the fingerprint alone")
+	}
+	pr.Timeline = append(pr.Timeline, Event{Kind: EventComment, Actor: user("carol"), At: at(3)})
+	commented := Build([]PR{pr}, Params{Login: "me", Now: at(4)}).Sections[0].Rows[0]
+	if commented.Fingerprint() == failing.Fingerprint() {
+		t.Fatal("a new comment left the fingerprint alone")
+	}
+}

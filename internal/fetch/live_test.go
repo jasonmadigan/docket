@@ -39,7 +39,7 @@ func TestLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("viewer %s, %d teams, budget %+v", v.Login, len(v.Teams), meta.Budget)
-	res, err := f.Fetch(ctx, v.Login)
+	res, err := f.Fetch(ctx, v.Login, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

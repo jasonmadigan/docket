@@ -2,6 +2,8 @@ package model
 
 import (
 	"cmp"
+	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -179,4 +181,19 @@ func (r Row) Labels() []string {
 		}
 	}
 	return labels
+}
+
+var agoSuffix = regexp.MustCompile(` \d+(s|m|h|d|w|mo|y) ago$`)
+
+// Fingerprint changes when anything shown for the row does, but not when
+// time alone moves an age on.
+func (r Row) Fingerprint() string {
+	parts := []string{r.PR.Title, string(r.CI), r.Review, r.Activity.UTC().Format(time.RFC3339Nano)}
+	for _, l := range slices.Concat(r.Left, r.Mine) {
+		parts = append(parts, agoSuffix.ReplaceAllString(l.Text, ""))
+	}
+	for _, is := range r.PR.Issues {
+		parts = append(parts, fmt.Sprintf("%s#%d %s", is.Repo, is.Number, is.State))
+	}
+	return strings.Join(parts, "\x1f")
 }
