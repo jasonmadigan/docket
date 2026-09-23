@@ -17,11 +17,13 @@ import (
 	"github.com/jasonmadigan/docket/internal/engine"
 	"github.com/jasonmadigan/docket/internal/fetch"
 	"github.com/jasonmadigan/docket/internal/gh"
+	"github.com/jasonmadigan/docket/internal/tui"
 )
 
-const usage = `usage: docket <command> [flags]
+const usage = `usage: docket [command] [flags]
 
 commands:
+  (none)  terminal UI
   dump    fetch once, print, exit
   help    show this
 
@@ -39,16 +41,16 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		fmt.Fprint(stderr, usage)
-		return errors.New("no command")
+	cmd := "tui"
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		cmd, args = args[0], args[1:]
 	}
-	cmd, args := args[0], args[1:]
 	flags := flag.NewFlagSet("docket "+cmd, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	poll := flags.Duration("poll", 0, "time between refreshes (default from config, else 60s)")
 	asJSON := new(bool)
 	switch cmd {
+	case "tui":
 	case "dump":
 		flags.BoolVar(asJSON, "json", false, "print JSON")
 	case "help":
@@ -76,7 +78,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	eng := engine.New(fetch.New(client), engine.Config{Poll: cfg.Poll, Ignore: cfg.IgnoreActors})
-	return printOnce(ctx, eng, stdout, stderr, *asJSON)
+	if cmd == "dump" {
+		return printOnce(ctx, eng, stdout, stderr, *asJSON)
+	}
+	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng) })
 }
 
 func loadConfig(poll time.Duration) (config.Config, error) {
@@ -109,4 +114,25 @@ func printOnce(ctx context.Context, eng *engine.Engine, stdout, stderr io.Writer
 		return dump.JSON(stdout, st.Snapshot)
 	}
 	return dump.Text(stdout, st.Snapshot)
+}
+
+type runner interface {
+	Run(ctx context.Context) error
+}
+
+// serve runs the engine beside a view until either ends, reporting an
+// engine failure over the view's own result.
+func serve(ctx context.Context, eng runner, view func(context.Context) error) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	go func() {
+		if err := eng.Run(ctx); err != nil {
+			cancel(err)
+		}
+	}()
+	err := view(ctx)
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, context.Canceled) {
+		return cause
+	}
+	return err
 }
