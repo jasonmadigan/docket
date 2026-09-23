@@ -128,3 +128,17 @@ func TestDoMapsErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestDoFailsWhenNoDataCameBack(t *testing.T) {
+	for _, body := range []string{
+		`{"data":null,"errors":[{"type":"INTERNAL","message":"Something went wrong while executing your query"}]}`,
+		`{"errors":[{"message":"Field 'nope' doesn't exist on type 'Query'"}]}`,
+	} {
+		var out viewer
+		err := client(t, respond(200, nil, body)).Do(context.Background(), "q", nil, &out)
+		var partial *PartialError
+		if err == nil || errors.As(err, &partial) {
+			t.Errorf("%s: err = %v, want a hard error", body, err)
+		}
+	}
+}

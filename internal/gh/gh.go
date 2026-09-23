@@ -2,6 +2,7 @@ package gh
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -69,18 +70,21 @@ func newClient(opts api.ClientOptions) (*Client, error) {
 }
 
 func (c *Client) Do(ctx context.Context, query string, vars map[string]any, out any) error {
-	err := c.gql.DoWithContext(ctx, query, vars, out)
+	var data json.RawMessage
+	err := c.gql.DoWithContext(ctx, query, vars, &data)
 	var httpErr *api.HTTPError
 	var gqlErr *api.GraphQLError
 	switch {
-	case err == nil:
-		return nil
 	case errors.As(err, &httpErr):
 		return c.fromHTTP(httpErr)
 	case errors.As(err, &gqlErr):
-		return fromGraphQL(gqlErr)
+		return fromGraphQL(gqlErr, data, out)
+	case err != nil:
+		return err
+	case len(data) == 0:
+		return errors.New("github returned no data")
 	}
-	return err
+	return json.Unmarshal(data, out)
 }
 
 func (c *Client) fromHTTP(e *api.HTTPError) error {
@@ -102,7 +106,9 @@ func (c *Client) fromHTTP(e *api.HTTPError) error {
 	return e
 }
 
-func fromGraphQL(e *api.GraphQLError) error {
+// fromGraphQL fails outright when no data came back (a timeout, a bad
+// query), since an empty result would read as nothing being open.
+func fromGraphQL(e *api.GraphQLError, data json.RawMessage, out any) error {
 	var msgs []string
 	for _, item := range e.Errors {
 		if item.Type == "RATE_LIMITED" {
@@ -111,6 +117,12 @@ func fromGraphQL(e *api.GraphQLError) error {
 		if !slices.Contains(msgs, item.Message) {
 			msgs = append(msgs, item.Message)
 		}
+	}
+	if len(data) == 0 {
+		return errors.New("github: " + strings.Join(msgs, "; "))
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return err
 	}
 	return &PartialError{Messages: msgs}
 }

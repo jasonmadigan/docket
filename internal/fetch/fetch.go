@@ -75,6 +75,9 @@ func (f *Fetcher) Viewer(ctx context.Context) (Viewer, Meta, error) {
 	if err := f.do(ctx, viewerQuery, nil, &who, &meta); err != nil {
 		return Viewer{}, Meta{}, fmt.Errorf("viewer: %w", err)
 	}
+	if who.Viewer.Login == "" {
+		return Viewer{}, Meta{}, errors.New("viewer: no login in the response")
+	}
 	meta.saw(who.RateLimit)
 	v := Viewer{Login: who.Viewer.Login}
 	var after any
@@ -137,11 +140,13 @@ func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.
 	meta.saw(budget)
 	found := map[string]map[string]bool{}
 	for _, q := range qualifiers {
+		raw, ok := resp[q.alias]
+		if !ok || string(raw) == "null" {
+			return nil, fmt.Errorf("%s: missing from the response", q.alias)
+		}
 		var sr searchResult
-		if raw, ok := resp[q.alias]; ok {
-			if err := json.Unmarshal(raw, &sr); err != nil {
-				return nil, fmt.Errorf("%s: %w", q.alias, err)
-			}
+		if err := json.Unmarshal(raw, &sr); err != nil {
+			return nil, fmt.Errorf("%s: %w", q.alias, err)
 		}
 		ids := map[string]bool{}
 		for page := 1; ; page++ {
@@ -176,14 +181,17 @@ func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.
 
 func (f *Fetcher) page(ctx context.Context, query, after string, meta *Meta) (searchResult, error) {
 	var resp struct {
-		RateLimit gh.Budget    `json:"rateLimit"`
-		Search    searchResult `json:"search"`
+		RateLimit gh.Budget     `json:"rateLimit"`
+		Search    *searchResult `json:"search"`
 	}
 	if err := f.do(ctx, pageQuery, map[string]any{"q": query, "after": after}, &resp, meta); err != nil {
 		return searchResult{}, err
 	}
+	if resp.Search == nil {
+		return searchResult{}, errors.New("search missing from the response")
+	}
 	meta.saw(resp.RateLimit)
-	return resp.Search, nil
+	return *resp.Search, nil
 }
 
 func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta) ([]model.PR, error) {
@@ -195,6 +203,9 @@ func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, logi
 		}
 		if err := f.do(ctx, detailQuery, map[string]any{"ids": ids, "login": login}, &resp, meta); err != nil {
 			return nil, err
+		}
+		if resp.Nodes == nil {
+			return nil, errors.New("nodes missing from the response")
 		}
 		meta.saw(resp.RateLimit)
 		for _, n := range resp.Nodes {

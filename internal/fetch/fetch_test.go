@@ -258,3 +258,37 @@ func TestViewerCollectsTeams(t *testing.T) {
 		t.Fatalf("budget = %+v", meta.Budget)
 	}
 }
+
+func TestFetchFailsWhenResultsAreMissing(t *testing.T) {
+	partial := &gh.PartialError{Messages: []string{"timeout"}}
+	cases := map[string][]reply{
+		"search alias": {{match: matchDiscovery, data: `{"author": null}`, err: partial}},
+		"detail nodes": {
+			{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A")})},
+			{match: matchDetail, data: `{"nodes": null}`, err: partial},
+		},
+		"next page": {
+			{match: matchDiscovery, data: discovery(map[string]string{
+				"author": `{"pageInfo": {"hasNextPage": true, "endCursor": "C"}, "nodes": [{"id": "PR_A"}]}`,
+			})},
+			{match: matchPage, data: `{"search": null}`, err: partial},
+		},
+	}
+	for name, replies := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := &fake{t: t, replies: replies}
+			if _, err := New(f).Fetch(context.Background(), "me"); err == nil {
+				t.Fatal("Fetch succeeded without the data it asked for")
+			}
+		})
+	}
+}
+
+func TestViewerFailsWithoutLogin(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: "viewer { login }", data: `{"viewer": null}`, err: &gh.PartialError{Messages: []string{"timeout"}}},
+	}}
+	if _, _, err := New(f).Viewer(context.Background()); err == nil {
+		t.Fatal("Viewer succeeded without a login")
+	}
+}
