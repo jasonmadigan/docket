@@ -310,3 +310,19 @@ func TestChangedMarksNewAndDifferentPRs(t *testing.T) {
 		t.Fatalf("state = %+v", s)
 	}
 }
+
+func TestConfigureAppliesAtOnce(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	bot := mine("a")
+	bot.Timeline = []model.Event{{Kind: model.EventComment, Actor: model.Actor{Login: "ci-robot"}, At: now}}
+	r.src.give(t, ok(bot))
+	if s := r.next(t, loaded); !s.Snapshot.Sections[0].Rows[0].Activity.Equal(now) {
+		t.Fatalf("activity = %v", s.Snapshot.Sections[0].Rows[0].Activity)
+	}
+	r.Configure(2*time.Minute, []string{"ci-robot"})
+	r.src.give(t, ok(bot))
+	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Next.Equal(now.Add(2*time.Minute)) })
+	if got := s.Snapshot.Sections[0].Rows[0].Activity; !got.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("ignored account still counted: activity %v", got)
+	}
+}

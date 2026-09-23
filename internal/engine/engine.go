@@ -97,6 +97,24 @@ func (e *Engine) Subscribe() (<-chan State, func()) {
 	}
 }
 
+// Configure changes the poll interval and the accounts that don't count as
+// people, then polls so the change shows at once.
+func (e *Engine) Configure(poll time.Duration, ignore []string) {
+	e.mu.Lock()
+	if poll > 0 {
+		e.cfg.Poll = poll
+	}
+	e.cfg.Ignore = slices.Clone(ignore)
+	e.mu.Unlock()
+	e.Refresh()
+}
+
+func (e *Engine) settings() (time.Duration, []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.cfg.Poll, e.cfg.Ignore
+}
+
 // Refresh polls now, unless github has asked us to wait.
 func (e *Engine) Refresh() {
 	select {
@@ -182,8 +200,9 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 		return err
 	}
 	keepBudget(st, res.Budget)
+	_, ignore := e.settings()
 	st.Snapshot = model.Build(res.PRs, model.Params{
-		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: e.cfg.Ignore, Now: now,
+		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: ignore, Now: now,
 	})
 	st.Changed = e.changed(st.Snapshot)
 	st.Loaded = true
@@ -201,7 +220,8 @@ func keepBudget(st *State, b gh.Budget) {
 // after waits for the reset once under a tenth of the budget is left, since
 // every tool using the token shares it.
 func (e *Engine) after(now time.Time, b gh.Budget) time.Time {
-	next := now.Add(e.cfg.Poll)
+	poll, _ := e.settings()
+	next := now.Add(poll)
 	if b.Limit > 0 && b.Remaining*10 < b.Limit && b.ResetAt.After(next) {
 		return b.ResetAt.Add(time.Second)
 	}
