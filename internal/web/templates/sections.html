@@ -2,9 +2,14 @@
 <div class="docket" data-title="{{.Title}}">
 <header>
 <h1>docket</h1>
-<p class="status">
-{{- if .Loaded}}{{.Count}} PRs · updated {{.Updated}}{{else}}fetching…{{end}}
-{{- with .Next}} · next {{.}}{{end}}
+{{- if .Loaded}}
+<p class="who">{{with .Login}}<b>{{.}}</b> · {{end}}{{.Count}} open</p>
+<p class="counts">{{range .Counts}}<span class="pill">{{.Name}} <b>{{.N}}</b></span>{{end}}</p>
+{{- end}}
+<p class="activity{{if .Busy}} busy{{else if .Err}} failed{{end}}">
+{{- if .Busy}}<span class="spinner" aria-hidden="true"></span>pulling data · {{.Phase}}
+{{- else if .Err}}✗ {{if .Loaded}}updated {{.Updated}} · {{end}}retry {{.Next}}
+{{- else}}updated {{.Updated}} · next {{.Next}}{{end}}
 {{- with .Budget}} · budget {{.}}{{end -}}
 </p>
 {{- with .Err}}
@@ -18,7 +23,7 @@
 <section>
 <h2>{{.Name}} <span class="count">{{len .Rows}}</span></h2>
 {{- range .Rows}}
-<details class="pr" data-id="{{.ID}}">
+<details class="pr{{if .Changed}} changed{{end}}" data-id="{{.ID}}">
 <summary>
 <span class="ci ci-{{.CI}}" title="{{.CILabel}}" aria-label="{{.CILabel}}"></span>
 <span class="age">{{.Age}}</span>

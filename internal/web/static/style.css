@@ -9,6 +9,7 @@
   --wait: #9a6700;
   --good: #1a7f37;
   --accent: #0969da;
+  --changed: #fff8c5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,6 +23,7 @@
     --wait: #d29922;
     --good: #3fb950;
     --accent: #58a6ff;
+    --changed: #3b2e00;
   }
 }
 
@@ -54,7 +56,6 @@ h1 {
   font-size: 18px;
 }
 
-.status,
 .meta,
 .empty {
   margin: 0;
@@ -220,5 +221,75 @@ summary:hover {
 
   .detail {
     padding-left: 16px;
+  }
+}
+
+.who,
+.counts,
+.activity {
+  margin: 0;
+}
+
+.who {
+  color: var(--muted);
+}
+
+.who b {
+  color: var(--fg);
+}
+
+.pill {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.pill b {
+  color: var(--fg);
+}
+
+.activity {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.activity.failed {
+  color: var(--bad);
+}
+
+.spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+details.pr.changed > summary {
+  animation: changed 12s ease-out;
+}
+
+@keyframes changed {
+  from {
+    background: var(--changed);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  details.pr.changed > summary {
+    animation: none;
   }
 }

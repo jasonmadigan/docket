@@ -1,7 +1,9 @@
 <div class="docket" data-title="docket (5)">
 <header>
 <h1>docket</h1>
-<p class="status">5 PRs · updated 12:00 · next 12:01 · budget 4812/5000</p>
+<p class="who"><b>me</b> · 5 open</p>
+<p class="counts"><span class="pill">Mine <b>2</b></span><span class="pill">Requested <b>2</b></span><span class="pill">Mentioned <b>1</b></span></p>
+<p class="activity">updated 12:00 · next 12:01 · budget 4812/5000</p>
 </header>
 <section>
 <h2>Mine <span class="count">2</span></h2>

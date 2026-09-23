@@ -12,13 +12,22 @@ import (
 type pageView struct {
 	Title    string
 	Loaded   bool
+	Login    string
 	Count    int
+	Counts   []count
+	Busy     bool
+	Phase    string
 	Updated  string
 	Next     string
 	Budget   string
 	Err      string
 	Warnings []string
 	Sections []sectionView
+}
+
+type count struct {
+	Name string
+	N    int
 }
 
 type sectionView struct {
@@ -28,6 +37,7 @@ type sectionView struct {
 
 type rowView struct {
 	ID        string
+	Changed   bool
 	URL       string
 	Ref       string
 	Title     string
@@ -54,11 +64,17 @@ var ciLabels = map[model.CI]string{
 
 func view(st engine.State, loc *time.Location) pageView {
 	snap := st.Snapshot
-	v := pageView{Title: "docket", Loaded: st.Loaded, Warnings: st.Warnings}
+	v := pageView{Title: "docket", Loaded: st.Loaded, Login: snap.Login, Warnings: st.Warnings}
 	if st.Loaded {
 		v.Title = fmt.Sprintf("docket (%d)", snap.Count)
 		v.Count = snap.Count
 		v.Updated = st.Updated.In(loc).Format("15:04")
+		for _, sec := range snap.Sections {
+			v.Counts = append(v.Counts, count{Name: sec.Name, N: len(sec.Rows)})
+		}
+	}
+	if v.Busy = st.Busy || (!st.Loaded && st.Err == nil); v.Busy {
+		v.Phase = phase(st.Progress.Phase, st.Progress.Done, st.Progress.Total)
 	}
 	if !st.Next.IsZero() {
 		v.Next = st.Next.In(loc).Format("15:04")
@@ -69,14 +85,30 @@ func view(st engine.State, loc *time.Location) pageView {
 	if st.Err != nil {
 		v.Err = st.Err.Error()
 	}
+	changed := map[string]bool{}
+	for _, id := range st.Changed {
+		changed[id] = true
+	}
 	for _, sec := range snap.Sections {
 		sv := sectionView{Name: sec.Name}
 		for _, r := range sec.Rows {
-			sv.Rows = append(sv.Rows, rowOf(r, snap))
+			row := rowOf(r, snap)
+			row.Changed = changed[row.ID]
+			sv.Rows = append(sv.Rows, row)
 		}
 		v.Sections = append(v.Sections, sv)
 	}
 	return v
+}
+
+func phase(name string, done, total int) string {
+	switch {
+	case name == "":
+		return "starting"
+	case total > 0:
+		return fmt.Sprintf("%s %d/%d", name, done, total)
+	}
+	return name
 }
 
 func rowOf(r model.Row, snap model.Snapshot) rowView {

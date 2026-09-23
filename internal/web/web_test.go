@@ -151,7 +151,7 @@ func TestUnsafeLinksNeutralised(t *testing.T) {
 
 func TestLoadingAndEmpty(t *testing.T) {
 	body := get(t, handler(t, newFake(engine.State{})), "localhost", "/sections").Body.String()
-	if !strings.Contains(body, "fetching…") || strings.Contains(body, "<section>") {
+	if !strings.Contains(body, "pulling data") || strings.Contains(body, "<section>") {
 		t.Fatalf("loading page:\n%s", body)
 	}
 	body = get(t, handler(t, newFake(engine.State{Loaded: true, Updated: fixture.Now})), "localhost", "/sections").Body.String()
@@ -261,5 +261,35 @@ func TestOnlyWebLinksAreRendered(t *testing.T) {
 		if !strings.Contains(body, text) {
 			t.Errorf("lost the text %q along with its link", text)
 		}
+	}
+}
+
+func TestHeaderShowsCountsAndProgress(t *testing.T) {
+	body := get(t, handler(t, newFake(fixture.State())), "localhost", "/sections").Body.String()
+	for _, want := range []string{
+		`<p class="who"><b>me</b> · 5 open</p>`,
+		`<span class="pill">Mine <b>2</b></span>`,
+		`<span class="pill">Requested <b>2</b></span>`,
+		`<p class="activity">updated 12:00 · next 12:01 · budget 4812/5000</p>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+	busy := fixture.State()
+	busy.Busy = true
+	busy.Progress.Phase, busy.Progress.Done, busy.Progress.Total = "details", 10, 24
+	body = get(t, handler(t, newFake(busy)), "localhost", "/sections").Body.String()
+	if !strings.Contains(body, `<p class="activity busy"><span class="spinner" aria-hidden="true"></span>pulling data · details 10/24`) {
+		t.Fatalf("busy page:\n%s", body)
+	}
+}
+
+func TestChangedRowsAreMarked(t *testing.T) {
+	st := fixture.State()
+	st.Changed = []string{"PR_3"}
+	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
+	if !strings.Contains(body, `<details class="pr changed" data-id="PR_3">`) || strings.Count(body, "pr changed") != 1 {
+		t.Fatalf("page:\n%s", body)
 	}
 }
