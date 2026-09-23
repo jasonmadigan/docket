@@ -64,9 +64,9 @@ Every line that applies, in this order. CI lines read the head commit's check ro
 | `reviewDecision: REVIEW_REQUIRED`, no requests, some approvals | needs more approvals |
 | `reviewDecision: REVIEW_REQUIRED`, no requests, no approvals | no reviewer |
 | unresolved review threads | N unresolved threads |
-| none of the above, `mergeStateStatus: CLEAN` | ready to merge |
+| no red or amber line above, `mergeStateStatus: CLEAN` or `HAS_HOOKS` | ready to merge |
 
-`mergeable: UNKNOWN` shows nothing; GitHub computes it lazily and a later tick has it. A null `reviewDecision` means the repo requires no review, so no review line.
+`draft` and `no CI` are grey notes and don't block `ready to merge`. `mergeable: UNKNOWN` shows nothing; GitHub computes it lazily and a later tick has it. A null `reviewDecision` means the repo requires no review, so no review line.
 
 Then my side. The review lines only arise on PRs I didn't open; replies count from my last comment or review, or from opening the PR when it's mine.
 
@@ -78,9 +78,9 @@ Then my side. The review lines only arise on PRs I didn't open; replies count fr
 | I reviewed, reviewed commit no longer on the branch | rewritten since your review |
 | I reviewed, head unchanged | you <state> Nd ago |
 | mentioned, nothing from me since | mentioned by X Nd ago |
-| others commented after my last comment | N replies since yours |
+| others commented or reviewed after my last comment | N replies since yours; approvals and dismissals don't count |
 
-`<state>` is approved, requested changes or commented. GitHub's mention event names only the person mentioned; the mentioner is whoever wrote the comment, review or PR created within 5 seconds of it. When the timeline window (last 100 items) doesn't reach my last comment, the count is shown as a floor, e.g. `3+`.
+`<state>` is approved, requested changes or commented; only submitted reviews count, so a pending draft never hides one. Deleted accounts show as ghost, as GitHub shows them. GitHub's mention event names only the person mentioned; the mentioner is whoever wrote the comment, review or PR created within 5 seconds of it. When the timeline window (last 100 items) doesn't reach my last comment, the count is shown as a floor, e.g. `3+`.
 
 ### Human activity
 
@@ -114,7 +114,7 @@ Each tick:
 2. Detail for every discovered PR, through `nodes(ids:)`, 10 per request.
 3. `model` builds a snapshot from detail and tags; the engine publishes it to subscribers.
 
-No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot.
+No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot, and detail drops any PR whose state isn't open, since search lags merges. A GraphQL error that comes back without data is a failed poll, never an empty list.
 
 At startup and hourly: `viewer { login }` and my team memberships, to name the team a request went to.
 
@@ -167,7 +167,7 @@ Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Ov
 - Listens on `127.0.0.1:7788`. Any other address needs an explicit `--addr` and prints a warning: there's no auth, and private repo titles are on the page.
 - Rejects requests whose `Host` is a name other than `localhost`, which blocks DNS rebinding; IP literals pass, so an explicit `--addr` still works from the LAN.
 - `Content-Security-Policy: default-src 'self'`; styles and script are separate embedded files.
-- Server-rendered sections. Rows link to the PR, failing checks and linked issues.
+- Server-rendered sections. Rows link to the PR, failing checks and linked issues, for http and https links only.
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
 - Tab title carries the count: `docket (23)`.
 - Light and dark via `prefers-color-scheme`.
