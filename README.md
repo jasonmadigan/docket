@@ -22,7 +22,7 @@ docket web --open   # http://127.0.0.1:7788
 docket dump --json  # one-off, for scripts
 ```
 
-In the terminal: `j`/`k` move, `enter` opens the PR, `c` its first failing check, `i` its linked issues, `r` refreshes, `/` filters, `?` shows help and warnings, `q` quits. Over SSH, links are copied to the clipboard instead of opened.
+In the terminal the header shows what docket is doing, and `◆` marks PRs that changed since the last refresh until you look at them. `j`/`k` move, `enter` opens the PR, `c` its first failing check, `i` its linked issues, `r` refreshes, `/` filters, `?` shows help and warnings, `q` quits. Over SSH, links are copied to the clipboard instead of opened.
 
 The web view has no auth and listens on loopback unless `--addr` says otherwise.
 

@@ -137,7 +137,7 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 |-|-|
 | `docket` | TUI |
 | `docket web` | web view |
-| `docket dump` | one fetch, print the snapshot, exit |
+| `docket dump` | one fetch, print the snapshot, exit; coloured and hyperlinked in a terminal, plain when piped |
 | `docket help` | usage |
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
@@ -146,7 +146,7 @@ Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
 ### TUI
 
-Full screen: one list under section headers, detail pane to the right (below on narrow terminals). Status line: last refresh, next refresh, remaining budget, errors. Columns drop as width shrinks; title and tags go last. Titles are OSC 8 hyperlinks.
+Full screen. A header bar carries my login, the open count and a count per section, and on the right either a spinner with the poll's step (`pulling data · details 10/24`) or when it last updated and next will; red, with the last success kept, after a failure. Below it, one list under section badges, and a rounded detail pane to the right (below on narrow terminals) titled with the PR and showing its link. A footer carries messages and errors, else key hints, with the budget on the right. PRs new or changed since the last poll carry a `◆` until visited; the clock ticking ages on doesn't count as change. Columns drop as width shrinks; title and tags go last. Refs, checks and issues are underlined OSC 8 hyperlinks.
 
 | Key | Action |
 |-|-|
@@ -169,6 +169,8 @@ Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Ov
 - `Content-Security-Policy: default-src 'self'`; styles and script are separate embedded files.
 - Server-rendered sections. Rows link to the PR, failing checks and linked issues, for http and https links only.
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
+- Header: login, open count, a pill per section, and a spinner with the poll's step while one runs; each step arrives over the event stream.
+- Rows that changed in the latest poll flash and fade.
 - Tab title carries the count: `docket (23)`.
 - Light and dark via `prefers-color-scheme`.
 - `--open` launches the browser. On another host, `ssh -L 7788:127.0.0.1:7788` reaches it.
