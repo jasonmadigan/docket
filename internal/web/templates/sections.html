@@ -2,6 +2,9 @@
 <div class="docket" data-title="{{.Title}}">
 <header>
 <h1>docket</h1>
+{{- if .Settings}}
+<button type="button" class="settings-button" data-open-settings>Settings</button>
+{{- end}}
 {{- if .Loaded}}
 <p class="who">{{with .Login}}<b>{{.}}</b> · {{end}}{{.Count}} open</p>
 <p class="counts">{{range .Counts}}<span class="pill">{{.Name}} <b>{{.N}}</b></span>{{end}}</p>

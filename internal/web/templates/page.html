@@ -10,6 +10,24 @@
 </head>
 <body>
 <main id="sections">{{template "sections" .}}</main>
+{{- if .Settings}}
+<dialog id="settings">
+<form id="settings-form">
+<h2>Settings</h2>
+<label for="poll">Refresh every</label>
+<select id="poll" name="poll"></select>
+<label for="ignore">Accounts that don't count as people</label>
+<input id="ignore" name="ignore" type="text" placeholder="openshift-ci-robot, codecov" autocomplete="off" spellcheck="false">
+<p class="hint">Bots and CI accounts, comma separated. Their comments don't count as activity or replies.</p>
+<p id="settings-status" class="error" role="status"></p>
+<div class="buttons">
+<button type="button" data-close-settings>Cancel</button>
+<button type="submit" class="primary">Save</button>
+</div>
+<p class="hint">Saved to <code>{{.SettingsPath}}</code></p>
+</form>
+</dialog>
+{{- end}}
 </body>
 </html>
 {{end}}

@@ -10,19 +10,21 @@ import (
 )
 
 type pageView struct {
-	Title    string
-	Loaded   bool
-	Login    string
-	Count    int
-	Counts   []count
-	Busy     bool
-	Phase    string
-	Updated  string
-	Next     string
-	Budget   string
-	Err      string
-	Warnings []string
-	Sections []sectionView
+	Settings     bool
+	SettingsPath string
+	Title        string
+	Loaded       bool
+	Login        string
+	Count        int
+	Counts       []count
+	Busy         bool
+	Phase        string
+	Updated      string
+	Next         string
+	Budget       string
+	Err          string
+	Warnings     []string
+	Sections     []sectionView
 }
 
 type count struct {
