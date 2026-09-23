@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -53,6 +54,12 @@ type Model struct {
 	// measure as the renderer does: wcwidth until the terminal reports
 	// unicode core (mode 2027), then graphemes
 	method ansi.Method
+	spin   spinner.Model
+	// spinning is true while a tick is in flight, so only one chain runs
+	spinning bool
+	// changed holds prs new or different since a poll, until visited
+	changed map[string]bool
+	seen    time.Time // the poll changed was last filled from
 }
 
 func Run(ctx context.Context, eng Engine) error {
@@ -83,6 +90,8 @@ func New(eng Engine, opts Options) (Model, func()) {
 		loc:     opts.Location,
 		filter:  filter,
 		st:      newStyles(true),
+		spin:    spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		changed: map[string]bool{},
 	}, unsubscribe
 }
 
@@ -125,8 +134,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateMsg:
 		m.state = engine.State(msg)
 		m.flash = ""
+		if s := m.state; s.Loaded && !s.Busy && !s.Updated.Equal(m.seen) {
+			m.seen = s.Updated
+			for _, id := range s.Changed {
+				m.changed[id] = true
+			}
+		}
 		m.rebuild()
-		return m, wait(m.states)
+		cmds := []tea.Cmd{wait(m.states)}
+		if m.working() && !m.spinning {
+			m.spinning = true
+			cmds = append(cmds, m.spin.Tick)
+		}
+		return m, tea.Batch(cmds...)
+	case spinner.TickMsg:
+		if !m.working() {
+			m.spinning = false
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spin, cmd = m.spin.Update(msg)
+		return m, cmd
 	case tea.ModeReportMsg:
 		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) {
 			m.method = ansi.GraphemeWidth
@@ -230,6 +258,17 @@ func (m Model) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // while it survives.
 func (m *Model) rebuild() {
 	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
+	present := map[string]bool{}
+	for _, sec := range m.state.Snapshot.Sections {
+		for _, r := range sec.Rows {
+			present[r.PR.ID] = true
+		}
+	}
+	for id := range m.changed {
+		if !present[id] {
+			delete(m.changed, id)
+		}
+	}
 	m.groups, m.rows = nil, nil
 	for _, sec := range m.state.Snapshot.Sections {
 		g := model.Section{Name: sec.Name}
@@ -263,7 +302,13 @@ func (m *Model) remember() {
 	m.selected = ""
 	if m.cursor < len(m.rows) {
 		m.selected = m.rows[m.cursor].PR.ID
+		delete(m.changed, m.selected)
 	}
+}
+
+// working is true while a poll runs, or before the first has landed.
+func (m Model) working() bool {
+	return m.state.Busy || (!m.state.Loaded && m.state.Err == nil)
 }
 
 func (m *Model) move(delta int) {

@@ -1,3 +1,4 @@
+ docket                                                                     ✗ retry 12:01
 
 
 
@@ -6,5 +7,4 @@
 
 
 
-
-retry 12:01 · fetch failed: dial tcp: no such host                                  ? help
+fetch failed: dial tcp: no such host

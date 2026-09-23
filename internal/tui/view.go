@@ -18,6 +18,8 @@ const (
 	minTitle = 20
 )
 
+const hints = "j/k move · enter open · c check · i issues · / filter · r refresh · ? help"
+
 var keyHelp = [][2]string{
 	{"j k ↑ ↓", "move"},
 	{"enter", "open PR"},
@@ -35,19 +37,24 @@ type layout struct {
 	detailWidth, detailHeight int
 }
 
+// bodyHeight is what's left between the header bar and the footer.
+func (m Model) bodyHeight() int {
+	return max(m.height-2, 0)
+}
+
 func (m Model) layout() layout {
-	body := max(m.height-1, 0)
+	body := m.bodyHeight()
 	if m.width >= wideAt {
 		list := m.width * 3 / 5
-		return layout{wide: true, listWidth: list, listHeight: body, detailWidth: m.width - list - 3, detailHeight: body}
+		return layout{wide: true, listWidth: list, listHeight: body, detailWidth: m.width - list - 1, detailHeight: body}
 	}
-	if body < 6 || len(m.rows) == 0 {
+	if body < 12 || len(m.rows) == 0 {
 		return layout{listWidth: m.width, listHeight: body}
 	}
 	// the list takes what it needs, the detail pane the rest, at least
-	// min(12, half)
-	list := min(max(m.listLength(), 1), body-1-min(12, body/2))
-	return layout{listWidth: m.width, listHeight: list, detailWidth: m.width, detailHeight: body - 1 - list}
+	// min(14, half)
+	list := min(max(m.listLength(), 1), body-min(14, body/2))
+	return layout{listWidth: m.width, listHeight: list, detailWidth: m.width, detailHeight: body - list}
 }
 
 func (m Model) View() tea.View {
@@ -65,37 +72,134 @@ func (m Model) render() string {
 	case m.width <= 0 || m.height <= 0:
 		return ""
 	case m.height == 1:
-		return m.status()
+		return m.footer()
 	}
+	lines := []string{m.header()}
+	if h := m.bodyHeight(); h > 0 {
+		lines = append(lines, m.body(h))
+	}
+	return strings.Join(append(lines, m.footer()), "\n")
+}
+
+func (m Model) body(h int) string {
 	l := m.layout()
-	body := m.height - 1
-	var view string
 	switch {
 	case m.help:
-		view = m.fit(m.helpLines(), m.width, body)
+		return m.fit(m.helpLines(), m.width, h)
 	case !m.state.Loaded:
-		text := "fetching…"
-		if m.state.Err != nil {
-			text = "no data yet"
+		text := m.st.faint.Render("no data yet")
+		if m.working() {
+			text = m.st.accent.Render(m.spin.View()) + " pulling data · " + phase(m.state.Progress.Phase, m.state.Progress.Done, m.state.Progress.Total)
 		}
-		placed := lipgloss.Place(m.width, body, lipgloss.Center, lipgloss.Center, m.st.faint.Render(text))
-		view = m.fit(strings.Split(placed, "\n"), m.width, body)
+		return m.centred(text, h)
 	case l.wide:
 		list := strings.Split(m.list(l), "\n")
 		detail := strings.Split(m.detail(l.detailWidth, l.detailHeight), "\n")
-		divider := m.st.faint.Render(" │ ")
-		rows := make([]string, body)
+		rows := make([]string, h)
 		for i := range rows {
-			rows[i] = list[i] + divider + detail[i]
+			rows[i] = list[i] + " " + detail[i]
 		}
-		view = strings.Join(rows, "\n")
+		return strings.Join(rows, "\n")
 	case l.detailHeight == 0:
-		view = m.list(l)
-	default:
-		rule := m.st.faint.Render(strings.Repeat("─", m.width))
-		view = strings.Join([]string{m.list(l), rule, m.detail(l.detailWidth, l.detailHeight)}, "\n")
+		return m.list(l)
 	}
-	return view + "\n" + m.status()
+	return m.list(l) + "\n" + m.detail(l.detailWidth, l.detailHeight)
+}
+
+func phase(name string, done, total int) string {
+	switch {
+	case name == "":
+		return "starting"
+	case total > 0:
+		return fmt.Sprintf("%s %d/%d", name, done, total)
+	}
+	return name
+}
+
+func (m Model) centred(text string, h int) string {
+	lines := make([]string, h)
+	pad := max((m.width-m.method.StringWidth(text))/2, 0)
+	lines[h/2] = strings.Repeat(" ", pad) + text
+	return m.fit(lines, m.width, h)
+}
+
+// header is the top bar: who, how many, and what the engine is doing.
+func (m Model) header() string {
+	bar := func(s lipgloss.Style) lipgloss.Style { return s.Background(m.st.bar) }
+	plain := bar(lipgloss.NewStyle())
+	s := m.state
+	brand := m.st.badge.Render(" docket ")
+	var who, counts string
+	if s.Loaded {
+		who = plain.Render(fmt.Sprintf(" %d open", s.Snapshot.Count))
+		if login := s.Snapshot.Login; login != "" {
+			who = plain.Render(" ") + bar(m.st.bold).Render(login) + plain.Render(" ·") + who
+		}
+		var parts []string
+		for _, sec := range s.Snapshot.Sections {
+			parts = append(parts, bar(m.st.faint).Render(sec.Name+" ")+bar(m.st.bold).Render(fmt.Sprint(len(sec.Rows))))
+		}
+		counts = plain.Render("   ") + strings.Join(parts, plain.Render("  "))
+	}
+	var right string
+	if s.Loaded || s.Err != nil {
+		right = plain.Render(m.activity(bar) + " ")
+	}
+	for _, left := range []string{brand + who + counts, brand + who, brand} {
+		if room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right); room >= 1 {
+			return left + plain.Render(strings.Repeat(" ", room)) + right
+		}
+	}
+	return m.method.Truncate(brand+right, m.width, "")
+}
+
+func (m Model) activity(bar func(lipgloss.Style) lipgloss.Style) string {
+	s := m.state
+	bad := bar(m.st.kinds[model.Bad])
+	switch {
+	case m.working():
+		p := s.Progress
+		return bar(m.st.accent).Render(m.spin.View()) + bar(lipgloss.NewStyle()).Render(" pulling data · "+phase(p.Phase, p.Done, p.Total))
+	case s.Err != nil && s.Loaded:
+		return bad.Render(fmt.Sprintf("✗ updated %s · retry %s", m.clock(s.Updated), m.clock(s.Next)))
+	case s.Err != nil:
+		return bad.Render("✗ retry " + m.clock(s.Next))
+	}
+	return bar(m.st.faint).Render(fmt.Sprintf("updated %s · next %s", m.clock(s.Updated), m.clock(s.Next)))
+}
+
+// footer carries messages and errors, else key hints, with the budget on
+// the right; the budget goes before any words get cut.
+func (m Model) footer() string {
+	if m.filtering {
+		return m.fit([]string{m.filter.View()}, m.width, 1)
+	}
+	var parts []string
+	if m.flash != "" {
+		parts = append(parts, m.flash)
+	}
+	if err := m.state.Err; err != nil {
+		parts = append(parts, m.st.kinds[model.Bad].Render("fetch failed: "+err.Error()))
+	}
+	if q := m.filter.Value(); q != "" {
+		parts = append(parts, fmt.Sprintf("filter %q: %d", q, len(m.rows)))
+	}
+	if n := len(m.state.Warnings); n > 0 {
+		parts = append(parts, m.st.kinds[model.Wait].Render(fmt.Sprintf("%d %s, see ?", n, model.Plural(n, "warning", "warnings"))))
+	}
+	left := strings.Join(parts, " · ")
+	if left == "" {
+		left = m.st.faint.Render(hints)
+	}
+	var right string
+	if b := m.state.Budget; b.Limit > 0 {
+		right = m.st.faint.Render(fmt.Sprintf("budget %d/%d", b.Remaining, b.Limit))
+	}
+	room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right)
+	if room < 1 {
+		return m.method.Truncate(left, m.width, "…")
+	}
+	return left + strings.Repeat(" ", room) + right
 }
 
 func (m Model) list(l layout) string {
@@ -118,7 +222,9 @@ func (m Model) listLines(width int) []string {
 	var lines []string
 	i := 0
 	for _, g := range m.groups {
-		lines = append(lines, m.st.header.Render(fmt.Sprintf("  %s (%d)", g.Name, len(g.Rows))))
+		badge := m.st.section.Render(fmt.Sprintf(" %s %d ", g.Name, len(g.Rows)))
+		rule := m.st.rule.Render(strings.Repeat("─", max(width-m.method.StringWidth(badge)-3, 0)))
+		lines = append(lines, "  "+badge+" "+rule)
 		for _, r := range g.Rows {
 			lines = append(lines, m.rowLine(r, cols, i == m.cursor))
 			i++
@@ -176,12 +282,16 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 	}
 	gap := paint(lipgloss.NewStyle()).Render(" ")
 	snap := m.state.Snapshot
-	marker := "  "
-	if selected {
-		marker = "▌ "
-	}
+	changed := m.changed[r.PR.ID]
 	var b strings.Builder
-	b.WriteString(paint(m.st.accent).Render(marker))
+	switch {
+	case selected:
+		b.WriteString(paint(m.st.accent).Render("▌ "))
+	case changed:
+		b.WriteString(m.st.kinds[model.Wait].Render("◆ "))
+	default:
+		b.WriteString("  ")
+	}
 	lead := func(text string, width int, s lipgloss.Style) {
 		if width > 0 {
 			b.WriteString(paint(s).Render(text) + gap)
@@ -189,8 +299,12 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 	}
 	lead(ciGlyph[r.CI], c.ci, m.st.ci[r.CI])
 	lead(m.padLeft(snap.Since(r.Activity), c.age), c.age, m.st.faint)
-	lead(m.pad(r.PR.Ref(), c.ref), c.ref, m.st.faint)
-	b.WriteString(paint(linked(lipgloss.NewStyle(), r.PR.URL)).Render(m.pad(r.PR.Title, c.title)))
+	lead(m.pad(r.PR.Ref(), c.ref), c.ref, linked(m.st.faint, r.PR.URL))
+	title := linked(lipgloss.NewStyle(), r.PR.URL)
+	if changed {
+		title = title.Bold(true)
+	}
+	b.WriteString(paint(title).Render(m.pad(r.PR.Title, c.title)))
 	trail := func(text string, width int, s lipgloss.Style) {
 		if width > 0 {
 			b.WriteString(gap + paint(s).Render(m.pad(text, width)))
@@ -208,13 +322,20 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 
 func (m Model) detail(w, h int) string {
 	r := m.current()
-	if r == nil {
+	if r == nil || w < 8 || h < 3 {
 		return m.fit(nil, w, h)
 	}
 	pr := r.PR
-	lines := []string{linked(m.st.bold, pr.URL).Render(pr.Ref())}
-	lines = append(lines, strings.Split(m.method.Wordwrap(pr.Title, w, ""), "\n")...)
-	lines = append(lines, m.st.faint.Render(m.state.Snapshot.Meta(*r)), m.st.accent.Render(strings.Join(r.Labels(), ", ")))
+	inner := w - 4
+	var lines []string
+	for _, l := range strings.Split(m.method.Wordwrap(pr.Title, inner, ""), "\n") {
+		lines = append(lines, m.st.bold.Render(l))
+	}
+	lines = append(lines,
+		linked(m.st.link, pr.URL).Render(strings.TrimPrefix(pr.URL, "https://")),
+		m.st.faint.Render(m.state.Snapshot.Meta(*r)),
+		m.st.accent.Render(strings.Join(r.Labels(), ", ")),
+	)
 	block := func(title string, body []string) {
 		if len(body) > 0 {
 			lines = append(append(lines, "", m.st.header.Render(title)), body...)
@@ -224,25 +345,43 @@ func (m Model) detail(w, h int) string {
 	block("You", m.facts(r.Mine))
 	var checks, reviewers, issues []string
 	for _, c := range pr.Checks.Failing {
-		checks = append(checks, "  "+m.st.kinds[model.Bad].Render(glyph[model.Bad])+" "+linked(lipgloss.NewStyle(), c.URL).Render(c.Name))
+		checks = append(checks, "  "+m.st.kinds[model.Bad].Render(glyph[model.Bad])+" "+linked(m.st.link, c.URL).Render(c.Name))
 	}
 	for _, rv := range model.Reviewers(pr) {
 		reviewers = append(reviewers, "  "+rv.Name+" "+m.st.faint.Render(rv.State))
 	}
 	for _, is := range pr.Issues {
-		ref := linked(lipgloss.NewStyle(), is.URL).Render(fmt.Sprintf("%s#%d", is.Repo, is.Number))
+		ref := linked(m.st.link, is.URL).Render(fmt.Sprintf("%s#%d", is.Repo, is.Number))
 		issues = append(issues, "  "+ref+" "+is.Title+" "+m.st.faint.Render(strings.ToLower(is.State)))
 	}
 	block("Failing checks", checks)
 	block("Reviewers", reviewers)
 	block("Linked issues", issues)
-	return m.fit(lines, w, h)
+	title := linked(m.st.header, pr.URL).Render(pr.Ref())
+	return m.box(title, lines, w, h)
+}
+
+// box draws a rounded border titled with title, fitting lines inside.
+func (m Model) box(title string, lines []string, w, h int) string {
+	edge := m.st.rule
+	title = m.method.Truncate(title, max(w-5, 0), "…")
+	fill := max(w-m.method.StringWidth(title)-5, 0)
+	out := []string{edge.Render("╭─ ") + title + edge.Render(" "+strings.Repeat("─", fill)+"╮")}
+	for _, line := range strings.Split(m.fit(lines, w-4, h-2), "\n") {
+		out = append(out, edge.Render("│ ")+line+edge.Render(" │"))
+	}
+	out = append(out, edge.Render("╰"+strings.Repeat("─", w-2)+"╯"))
+	return strings.Join(out, "\n")
 }
 
 func (m Model) facts(lines []model.Line) []string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
-		out[i] = "  " + m.st.kinds[l.Kind].Render(glyph[l.Kind]) + " " + linked(lipgloss.NewStyle(), l.URL).Render(l.Text)
+		text := lipgloss.NewStyle()
+		if l.URL != "" {
+			text = m.st.link
+		}
+		out[i] = "  " + m.st.kinds[l.Kind].Render(glyph[l.Kind]) + " " + linked(text, l.URL).Render(l.Text)
 	}
 	return out
 }
@@ -254,55 +393,6 @@ func linked(s lipgloss.Style, url string) lipgloss.Style {
 		return s.Hyperlink(url)
 	}
 	return s
-}
-
-func (m Model) status() string {
-	if m.filtering {
-		return m.fit([]string{m.filter.View()}, m.width, 1)
-	}
-	left := m.statusText()
-	right := m.st.faint.Render(m.budgetText())
-	room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right)
-	if room < 1 {
-		return m.method.Truncate(left, m.width, "…")
-	}
-	return left + strings.Repeat(" ", room) + right
-}
-
-func (m Model) statusText() string {
-	if m.flash != "" {
-		return m.flash + " · " + m.stateText()
-	}
-	return m.stateText()
-}
-
-func (m Model) stateText() string {
-	s := m.state
-	bad := m.st.kinds[model.Bad]
-	switch {
-	case s.Err != nil && s.Loaded:
-		return bad.Render(fmt.Sprintf("updated %s · retry %s · fetch failed: %v", m.clock(s.Updated), m.clock(s.Next), s.Err))
-	case s.Err != nil:
-		return bad.Render(fmt.Sprintf("retry %s · fetch failed: %v", m.clock(s.Next), s.Err))
-	case !s.Loaded:
-		return "fetching…"
-	}
-	text := fmt.Sprintf("%d PRs · updated %s · next %s", s.Snapshot.Count, m.clock(s.Updated), m.clock(s.Next))
-	if q := m.filter.Value(); q != "" {
-		text += fmt.Sprintf(" · filter %q: %d", q, len(m.rows))
-	}
-	if n := len(s.Warnings); n > 0 {
-		text += fmt.Sprintf(" · %d %s, see ?", n, model.Plural(n, "warning", "warnings"))
-	}
-	return text
-}
-
-func (m Model) budgetText() string {
-	text := "? help"
-	if b := m.state.Budget; b.Limit > 0 {
-		text = fmt.Sprintf("budget %d/%d · %s", b.Remaining, b.Limit, text)
-	}
-	return text
 }
 
 func (m Model) clock(t time.Time) string {

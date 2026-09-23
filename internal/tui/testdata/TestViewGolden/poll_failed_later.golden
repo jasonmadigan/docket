@@ -1,30 +1,30 @@
-  Mine (2)                                                                           │ acme/widgets#51
-▌ ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Add rate limit docs
-  ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ opened 5w ago · touched 5w ago
-  Requested (2)                                                                      │ author
-  ✓   9d acme/gateway#1188 Bump Envoy to 1.37        review   bob   team             │
-  ●   1d acme/gateway#1203 Support weighted backends review   alice review,commented │ What's left
-  Mentioned (1)                                                                      │   ✓ ready to merge
-  ·   1y acme/docs#88      Rewrite the getting star…          erin  mentioned        │
-                                                                                     │ Reviewers
-                                                                                     │   dave approved
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-                                                                                     │
-updated 12:00 · retry 12:02 · fetch failed: Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host
+ docket  me · 5 open   Mine 2  Requested 2  Mentioned 1                                                       ✗ updated 12:00 · retry 12:02
+   Mine 2  ───────────────────────────────────────────────────────────────────────── ╭─ acme/widgets#51 ───────────────────────────────────╮
+▌ ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Add rate limit docs                                 │
+  ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ github.com/acme/widgets/pull/51                     │
+   Requested 2  ──────────────────────────────────────────────────────────────────── │ opened 5w ago · touched 5w ago                      │
+  ✓   9d acme/gateway#1188 Bump Envoy to 1.37        review   bob   team             │ author                                              │
+  ●   1d acme/gateway#1203 Support weighted backends review   alice review,commented │                                                     │
+   Mentioned 1  ──────────────────────────────────────────────────────────────────── │ What's left                                         │
+  ·   1y acme/docs#88      Rewrite the getting star…          erin  mentioned        │   ✓ ready to merge                                  │
+                                                                                     │                                                     │
+                                                                                     │ Reviewers                                           │
+                                                                                     │   dave approved                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     ╰─────────────────────────────────────────────────────╯
+fetch failed: Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host · 1 warning, see ?       budget 4812/5000

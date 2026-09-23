@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
@@ -127,6 +128,7 @@ func TestViewGolden(t *testing.T) {
 		{"poll failed later", fixture.Failed(), 140, 30, nil},
 		{"help", fixture.Failed(), 90, 20, []string{"?"}},
 		{"nothing open", engine.State{Loaded: true, Updated: fixture.Now, Next: fixture.Now.Add(time.Minute)}, 90, 10, nil},
+		{"busy", busyFixture(), 140, 30, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -201,7 +203,7 @@ func TestKeysMoveWithinBounds(t *testing.T) {
 func TestRefreshKey(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	hs.press("r")
-	if hs.eng.refreshed != 1 || !strings.Contains(hs.screen(), "refreshing") {
+	if hs.eng.refreshed != 1 || !strings.Contains(lastLine(hs.screen()), "refreshing") {
 		t.Fatalf("refreshed %d times; screen:\n%s", hs.eng.refreshed, hs.screen())
 	}
 }
@@ -214,7 +216,7 @@ func TestFilter(t *testing.T) {
 	if len(hs.m.rows) != 2 {
 		t.Fatalf("%d rows match acme/gateway", len(hs.m.rows))
 	}
-	if screen := hs.screen(); strings.Contains(screen, "acme/widgets#51") || !strings.Contains(screen, `filter "acme/gateway": 2`) {
+	if screen := hs.screen(); strings.Contains(screen, "acme/widgets#51") || !strings.Contains(lastLine(screen), `filter "acme/gateway": 2`) {
 		t.Fatalf("screen:\n%s", screen)
 	}
 	hs.press("esc")
@@ -260,8 +262,11 @@ func TestSelectionSurvivesRefresh(t *testing.T) {
 }
 
 func TestScrollFollowsCursor(t *testing.T) {
-	hs := newHarness(t, fixture.State(), 90, 8)
-	list := func() string { return strings.Join(strings.Split(hs.screen(), "\n")[:3], "\n") }
+	hs := newHarness(t, fixture.State(), 90, 6)
+	list := func() string {
+		lines := strings.Split(hs.screen(), "\n")
+		return strings.Join(lines[1:len(lines)-1], "\n")
+	}
 	hs.press("j", "j", "j", "j")
 	if !strings.Contains(list(), "acme/docs#88") {
 		t.Fatalf("bottom row out of view:\n%s", list())
@@ -301,14 +306,14 @@ func lastLine(screen string) string {
 	return strings.TrimRight(lines[len(lines)-1], " ")
 }
 
-func TestStatusDropsBudgetBeforeCuttingWords(t *testing.T) {
+func TestFooterDropsBudgetBeforeCuttingWords(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 44, 12)
-	if got := lastLine(hs.screen()); got != "5 PRs · updated 12:00 · next 12:01" {
-		t.Fatalf("status = %q", got)
+	if got := lastLine(hs.screen()); strings.Contains(got, "budget") && !strings.Contains(got, "budget 4812/5000") {
+		t.Fatalf("footer cut the budget: %q", got)
 	}
 	hs = newHarness(t, fixture.Failed(), 60, 12)
 	if got := lastLine(hs.screen()); !strings.HasSuffix(got, "…") || strings.Contains(got, "budget") {
-		t.Fatalf("status = %q", got)
+		t.Fatalf("footer = %q", got)
 	}
 }
 
@@ -326,10 +331,18 @@ func TestNothingOpenHasNoDetailPane(t *testing.T) {
 	}
 }
 
-func TestErrorStatusKeepsLastSuccess(t *testing.T) {
+func firstLine(screen string) string {
+	return strings.TrimRight(strings.Split(screen, "\n")[0], " ")
+}
+
+func TestErrorKeepsLastSuccess(t *testing.T) {
 	hs := newHarness(t, fixture.Failed(), 140, 30)
-	if got := lastLine(hs.screen()); !strings.HasPrefix(got, "updated 12:00 · retry 12:02 · fetch failed: ") {
-		t.Fatalf("status = %q", got)
+	screen := hs.screen()
+	if got := firstLine(screen); !strings.HasSuffix(got, "✗ updated 12:00 · retry 12:02") {
+		t.Fatalf("header = %q", got)
+	}
+	if got := lastLine(screen); !strings.HasPrefix(got, "fetch failed: Post") {
+		t.Fatalf("footer = %q", got)
 	}
 }
 
@@ -337,7 +350,7 @@ func TestFlashClearsOnNewState(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	hs.press("r")
 	hs.send(stateMsg(fixture.State()))
-	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "5 PRs") {
+	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "j/k move") {
 		t.Fatalf("status = %q", got)
 	}
 }
@@ -371,4 +384,95 @@ func TestEmojiRowsMatchTheRenderer(t *testing.T) {
 	exact(t, hs.screen(), ansi.StringWidthWc, 90)
 	hs.send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet})
 	exact(t, hs.screen(), ansi.StringWidth, 90)
+}
+
+func TestHeaderShowsCountsAndActivity(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	got := firstLine(hs.screen())
+	for _, want := range []string{" docket ", "me · 5 open", "Mine 2", "Requested 2", "Mentioned 1", "updated 12:00 · next 12:01"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("header lacks %q: %q", want, got)
+		}
+	}
+	busy := fixture.State()
+	busy.Busy = true
+	busy.Progress.Phase, busy.Progress.Done, busy.Progress.Total = "details", 10, 24
+	hs.send(stateMsg(busy))
+	if got := firstLine(hs.screen()); !strings.HasSuffix(got, "pulling data · details 10/24") {
+		t.Fatalf("busy header = %q", got)
+	}
+}
+
+func TestFirstLoadShowsWhatItIsDoing(t *testing.T) {
+	st := engine.State{Busy: true}
+	st.Progress.Phase = "finding PRs"
+	hs := newHarness(t, st, 90, 12)
+	if !strings.Contains(hs.screen(), "pulling data · finding PRs") {
+		t.Fatalf("screen:\n%s", hs.screen())
+	}
+}
+
+func TestSpinnerRunsOnlyWhileBusy(t *testing.T) {
+	busy := fixture.State()
+	busy.Busy = true
+	hs := newHarness(t, busy, 140, 30)
+	if !hs.m.spinning {
+		t.Fatal("no spinner while busy")
+	}
+	hs.send(stateMsg(fixture.State()))
+	hs.send(spinner.TickMsg{})
+	if hs.m.spinning {
+		t.Fatal("spinner kept going after the poll finished")
+	}
+}
+
+func TestChangedRowsAreMarkedUntilVisited(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	later := fixture.State()
+	later.Updated = fixture.Now.Add(time.Minute)
+	later.Changed = []string{"PR_3"}
+	hs.send(stateMsg(later))
+	row := func() string {
+		for _, line := range strings.Split(hs.screen(), "\n") {
+			if strings.Contains(line, "acme/gateway#1203") && !strings.Contains(line, "╭") {
+				return line
+			}
+		}
+		return ""
+	}
+	if got := row(); !strings.HasPrefix(got, "◆ ") {
+		t.Fatalf("changed row not marked: %q", got)
+	}
+	hs.press("j", "j", "j")
+	if got := row(); !strings.HasPrefix(got, "▌ ") {
+		t.Fatalf("selected row = %q", got)
+	}
+	hs.press("j")
+	if got := row(); !strings.HasPrefix(got, "  ") {
+		t.Fatalf("visited row still marked: %q", got)
+	}
+	busy := later
+	busy.Busy = true
+	hs.send(stateMsg(busy))
+	if got := row(); !strings.HasPrefix(got, "  ") {
+		t.Fatalf("a busy state re-marked a visited row: %q", got)
+	}
+}
+
+func TestDetailShowsTheLink(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	screen := hs.screen()
+	if !strings.Contains(screen, "╭─ acme/widgets#51 ") || !strings.Contains(screen, "github.com/acme/widgets/pull/51") {
+		t.Fatalf("screen:\n%s", screen)
+	}
+	if raw := hs.m.View().Content; !strings.Contains(raw, "\x1b]8;;https://github.com/acme/widgets/pull/51") {
+		t.Fatal("the PR link isn't a terminal hyperlink")
+	}
+}
+
+func busyFixture() engine.State {
+	st := fixture.State()
+	st.Busy = true
+	st.Progress.Phase, st.Progress.Done, st.Progress.Total = "details", 10, 24
+	return st
 }
