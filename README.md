@@ -10,6 +10,8 @@ A PR is listed while it's open and you opened it, were asked to review it (direc
 
 An issue is listed while it's open and you opened it, are assigned to it, were @-mentioned in it or commented on it. PRs and issues each have a tab.
 
+![issues in the terminal](docs/img/tui-issues.png)
+
 ## What it shows
 
 - CI: passing, running, or failing and which checks.

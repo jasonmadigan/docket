@@ -176,10 +176,85 @@ func PRs() []model.PR {
 	return prs
 }
 
+func issue(repo string, n int, title, author string, created time.Duration, tags ...model.Tag) model.Issue {
+	return model.Issue{Item: model.Item{
+		ID: repo + "#" + strconv.Itoa(n), Repo: repo, Number: n, Title: title, URL: url(repo, "issues", n),
+		Author: user(author), CreatedAt: ago(created), Tags: tags,
+	}}
+}
+
+func Issues() []model.Issue {
+	var issues []model.Issue
+
+	is := issue("acme/operator", 2287, "Gateway class changes are ignored", "carol", 9*day, model.TagAssigned)
+	is.Assignees = []model.Actor{user(me)}
+	is.Labels = []string{"bug", "priority/high"}
+	is.PRs = []model.PRRef{{Repo: "acme/operator", Number: 2310, Title: "Reconcile policies when the gateway class changes", URL: url("acme/operator", "pull", 2310), State: "OPEN"}}
+	is.Timeline = []model.Event{
+		{Kind: model.EventAssigned, Actor: user("carol"), At: ago(8 * day), Target: me},
+		{Kind: model.EventReferenced, Actor: user(me), At: ago(6 * day)},
+		{Kind: model.EventComment, Actor: user("carol"), At: ago(26 * time.Hour)},
+	}
+	issues = append(issues, is)
+
+	is = issue("acme/gateway", 1390, "Retry budget for upstream connects", me, 30*day, model.TagAuthor)
+	is.Assignees = []model.Actor{user(me), user("bob")}
+	is.Labels = []string{"enhancement"}
+	is.SubIssues = model.SubIssues{Total: 5, Completed: 2}
+	is.Timeline = []model.Event{{Kind: model.EventComment, Actor: user("bob"), At: ago(4 * day)}}
+	issues = append(issues, is)
+
+	is = issue("acme/docs", 305, "Search results miss the API reference", me, 45*day, model.TagAuthor)
+	is.Labels = []string{"docs"}
+	is.PRs = []model.PRRef{{Repo: "acme/docs", Number: 318, Title: "Document rate limit response headers", URL: url("acme/docs", "pull", 318), State: "OPEN", Draft: true}}
+	issues = append(issues, is)
+
+	is = issue("acme/cli", 140, "status hangs when the cluster is unreachable", "dave", 12*day, model.TagMentioned)
+	is.Assignees = []model.Actor{user("dave")}
+	is.Labels = []string{"bug"}
+	is.Timeline = []model.Event{
+		{Kind: model.EventComment, Actor: user("dave"), At: ago(3 * day)},
+		{Kind: model.EventMentioned, Actor: user(me), At: ago(3 * day)},
+	}
+	issues = append(issues, is)
+
+	is = issue("acme/console", 802, "Contrast of policy badges in dark mode", "erin", 20*day, model.TagCommented)
+	is.Assignees = []model.Actor{user("erin")}
+	is.PRs = []model.PRRef{{Repo: "acme/console", Number: 790, Title: "Raise badge contrast", URL: url("acme/console", "pull", 790), State: "MERGED"}}
+	is.Timeline = []model.Event{
+		{Kind: model.EventComment, Actor: user(me), At: ago(15 * day)},
+		{Kind: model.EventComment, Actor: user("erin"), At: ago(2 * day)},
+	}
+	issues = append(issues, is)
+
+	is = issue("acme/rfcs", 38, "RFC: rate limit policy v2", "frank", 200*day, model.TagCommented)
+	is.Timeline = []model.Event{{Kind: model.EventComment, Actor: user(me), At: ago(190 * day)}}
+	issues = append(issues, is)
+
+	is = issue("acme/operator", 1904, "Flaky e2e on arm64 runners", "bob", 400*day, model.TagMentioned)
+	is.Labels = []string{"flake"}
+	is.Timeline = []model.Event{
+		{Kind: model.EventComment, Actor: user("bob"), At: ago(380 * day)},
+		{Kind: model.EventMentioned, Actor: user(me), At: ago(380 * day)},
+	}
+	issues = append(issues, is)
+
+	return issues
+}
+
+// Archive has an old PR and two quiet issues put away.
+func Archive() map[string]time.Time {
+	return map[string]time.Time{
+		"acme/docs#301":      ago(3 * day),
+		"acme/rfcs#38":       ago(day),
+		"acme/operator#1904": ago(5 * time.Hour),
+	}
+}
+
 // State is a loaded engine state over PRs, with two of them just changed.
 func State() engine.State {
 	return engine.State{
-		Snapshot: model.Build(PRs(), nil, model.Params{Login: me, Teams: []string{"acme/maintainers"}, Now: Now}),
+		Snapshot: model.Build(PRs(), Issues(), model.Params{Login: me, Teams: []string{"acme/maintainers"}, Archive: Archive(), Now: Now}),
 		Loaded:   true,
 		Updated:  Now,
 		Next:     Now.Add(time.Minute),

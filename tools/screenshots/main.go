@@ -1,6 +1,6 @@
 // Command screenshots renders docket over made-up data for the README.
 //
-//	go run ./tools/screenshots tui 150 32 [keys] > shot.ansi   # then freeze
+//	go run ./tools/screenshots tui 150 32 [keys] > shot.ansi   # keys such as tab or s; then freeze
 //	go run ./tools/screenshots web                            # serves 127.0.0.1:7799
 //	go run ./tools/screenshots text                           # dump output
 package main
@@ -96,9 +96,20 @@ func frame(st engine.State, prefs *settings, w, h int, keys []string) string {
 		model, _ = model.Update(msg)
 	}
 	for _, k := range keys {
-		model, _ = model.Update(tea.KeyPressMsg{Code: []rune(k)[0], Text: k})
+		model, _ = model.Update(press(k))
 	}
 	return model.View().Content
+}
+
+// press is the message a terminal sends for the key k.
+func press(k string) tea.KeyPressMsg {
+	switch k {
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	}
+	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 }
 
 // drain runs cmd and any batch it returns, collecting the messages.
