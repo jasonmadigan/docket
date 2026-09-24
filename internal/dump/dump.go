@@ -35,10 +35,10 @@ func JSON(w io.Writer, s model.Snapshot) error {
 
 var indent = strings.Repeat(" ", 16)
 
-// Text prints pull requests, then issues: a line per item, its tags and
-// status beneath, then its link. It is styled and hyperlinked; write it
-// through a colorprofile writer, which strips that when the output isn't a
-// terminal.
+// Text prints pull requests, then issues, then how many are archived: a
+// line per item, its tags and status beneath, then its link. It is styled
+// and hyperlinked; write it through a colorprofile writer, which strips
+// that when the output isn't a terminal.
 func Text(w io.Writer, s model.Snapshot) error {
 	var blocks []string
 	for _, l := range []struct {
@@ -58,7 +58,14 @@ func Text(w io.Writer, s model.Snapshot) error {
 		}
 		blocks = append(blocks, b.String())
 	}
-	_, err := io.WriteString(w, strings.Join(blocks, "\n"))
+	out := strings.Join(blocks, "\n")
+	if n := s.Archived.Count; n > 0 {
+		if out != "" {
+			out += "\n"
+		}
+		out += faint.Render(fmt.Sprintf("%d archived", n)) + "\n"
+	}
+	_, err := io.WriteString(w, out)
 	return err
 }
 

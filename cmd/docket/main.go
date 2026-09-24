@@ -14,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 
+	"github.com/jasonmadigan/docket/internal/archive"
 	"github.com/jasonmadigan/docket/internal/config"
 	"github.com/jasonmadigan/docket/internal/dump"
 	"github.com/jasonmadigan/docket/internal/engine"
@@ -88,24 +89,37 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	apath, err := archive.Path()
+	if err != nil {
+		return err
+	}
+	archived, err := archive.Load(apath)
+	if err != nil {
+		return err
+	}
 	client, err := gh.New()
 	if err != nil {
 		return err
 	}
 	eng := engine.New(fetch.New(client), engine.Config{Poll: cfg.Poll, Ignore: cfg.IgnoreActors})
+	eng.SetArchive(archive.Times(archived))
 	if cmd == "dump" {
 		return printOnce(ctx, eng, stdout, stderr, *asJSON)
 	}
 	store := config.NewStore(path, cfg, func(c config.Config) { eng.Configure(c.Poll, c.IgnoreActors) })
+	archives := archive.NewStore(apath, archived, func(es []archive.Entry) { eng.SetArchive(archive.Times(es)) }, eng.Prunable)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go store.Watch(ctx, 2*time.Second)
+	go archives.Watch(ctx, 2*time.Second)
 	if cmd == "web" {
 		return serve(ctx, eng, func(ctx context.Context) error {
-			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr, Settings: store})
+			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr, Settings: store, Archive: archives})
 		})
 	}
-	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng, tui.Options{Settings: store}) })
+	return serve(ctx, eng, func(ctx context.Context) error {
+		return tui.Run(ctx, eng, tui.Options{Settings: store, Archive: archives})
+	})
 }
 
 func loadConfig(path string, poll time.Duration) (config.Config, error) {

@@ -80,6 +80,12 @@ poll = "1m"
 ignore_actors = ["codecov", "openshift-ci-robot"]
 ```
 
+## Archive
+
+Press `a` in the terminal, or Archive in a row's detail in the browser, to move a PR or issue to the Archived tab. It stays there until you unarchive it the same way, or it closes; if it's reopened, it comes back. `u` undoes the last archive in the terminal. Nothing changes on GitHub.
+
+The archive lives in `~/.config/docket/archive.toml`, beside the settings, so whatever syncs your settings between machines carries it too. docket writes it only when you archive or unarchive something.
+
 ## Rate limit
 
 A refresh costs a few GraphQL points: one to find your PRs and issues, then roughly one per ten PRs and one per 25 issues for their detail. Two dozen PRs and a hundred issues cost about 10, out of the 5,000 an hour your token shares with everything else using it. With under a tenth left, docket waits for the reset.

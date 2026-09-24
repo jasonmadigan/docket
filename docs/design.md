@@ -200,7 +200,7 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 |-|-|
 | `docket` | TUI |
 | `docket web` | web view |
-| `docket dump` | one fetch, print PRs then issues, exit; coloured and hyperlinked in a terminal, plain when piped |
+| `docket dump` | one fetch, print PRs then issues, leaving archived ones out bar a count, exit; coloured and hyperlinked in a terminal, plain when piped |
 | `docket help` | usage |
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -43,5 +45,21 @@ func TestRunHelp(t *testing.T) {
 	}
 	if !strings.Contains(flags.String(), "-json") {
 		t.Fatalf("dump -h = %q", flags.String())
+	}
+}
+
+func TestRunRefusesABrokenArchive(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	path := filepath.Join(dir, "docket", "archive.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("[[item\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := run(context.Background(), []string{"dump"}, io.Discard, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("err = %v, want one naming %s", err, path)
 	}
 }
