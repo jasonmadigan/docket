@@ -1,3 +1,5 @@
+Pull requests
+
 Mine (2)
   pass      5w  acme/widgets#51  Add rate limit docs
                 author · ready to merge
@@ -18,3 +20,20 @@ Mentioned (1)
   none      1y  acme/docs#88  Rewrite the getting started guide
                 mentioned · no CI · ready to merge · mentioned by erin 1y ago
                 https://github.com/acme/docs/pull/88
+
+Issues
+
+Mine (1)
+  none     10d  acme/gateway#1180  Document weighted backends
+                author · 1 of 3 sub-issues completed · unassigned · 1 reply since yours · labels docs
+                https://github.com/acme/gateway/issues/1180
+
+Assigned (1)
+  open      5d  acme/widgets#7  Loop never ends
+                assigned · PR acme/widgets#42 open · assigned to you 6d ago · assignees me · labels bug
+                https://github.com/acme/widgets/issues/7
+
+Mentioned (1)
+  merged    1d  acme/docs#90  Broken link on the install page
+                mentioned, commented · PR acme/docs#91 merged · mentioned by erin 1d ago · 1 reply since yours · assignees erin
+                https://github.com/acme/docs/issues/90

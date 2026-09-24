@@ -30,6 +30,7 @@ func TestTextIsStyledAndLinked(t *testing.T) {
 	for _, want := range []string{
 		"\x1b]8;;https://github.com/acme/widgets/pull/42",
 		"\x1b]8;;https://github.com/acme/widgets/issues/7",
+		"\x1b]8;;https://github.com/acme/docs/pull/91",
 		"\x1b]8;;https://ci.example/e2e",
 		"\x1b[",
 	} {
@@ -50,5 +51,8 @@ func TestJSONRoundTrips(t *testing.T) {
 	}
 	if back.PRs.Count != 5 || len(back.PRs.Sections) != 3 || back.PRs.Sections[1].Rows[0].PR.Ref() != "acme/gateway#1188" {
 		t.Fatalf("round trip = %+v", back)
+	}
+	if back.Issues.Count != 3 || back.Issues.Sections[1].Name != "Assigned" || back.Issues.Sections[1].Rows[0].Issue.Ref() != "acme/widgets#7" {
+		t.Fatalf("issues round trip = %+v", back.Issues)
 	}
 }
