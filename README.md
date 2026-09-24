@@ -2,11 +2,13 @@
 
 [![test](https://github.com/jasonmadigan/docket/actions/workflows/test.yml/badge.svg)](https://github.com/jasonmadigan/docket/actions/workflows/test.yml)
 
-Every open pull request you're involved in, live in your terminal or a browser tab: CI, what's left before it can merge, linked issues, and how long since anyone touched it.
+Every open pull request and issue you're involved in, live in your terminal or a browser tab: CI, what's left before a PR can merge or an issue can close, linked issues and PRs, and how long since anyone touched it.
 
 ![docket in a terminal](docs/img/tui.png)
 
 A PR is listed while it's open and you opened it, were asked to review it (directly or through a team), are assigned to it, were @-mentioned in it, reviewed it or commented on it. Nothing is hidden for being old: in each section the longest-neglected come first, so nothing quietly dies.
+
+An issue is listed while it's open and you opened it, are assigned to it, were @-mentioned in it or commented on it. PRs and issues each have a tab.
 
 ## What it shows
 
@@ -14,6 +16,7 @@ A PR is listed while it's open and you opened it, were asked to review it (direc
 - What's left: conflicts, behind base, changes requested and by whom, reviewers still awaited, unresolved threads, or ready to merge.
 - Your side: a review asked of you or your team, commits pushed since your review, mentions you haven't answered, replies since your last comment.
 - Linked issues, and how long since a person, not a bot, last touched the PR.
+- Issues: linked PRs and whether they've merged, sub-issue progress, who's assigned, labels, and mentions or replies waiting on you.
 
 It refreshes every minute. The header shows what it's doing while it does it, and `◆` marks PRs that changed since the last refresh until you've looked at them.
 
@@ -39,9 +42,11 @@ docket dump         # print once and exit; --json for scripts
 |-|-|
 | `j` `k`, arrows, wheel | move |
 | click | select |
-| `enter` | open the PR |
+| `tab` | switch between PRs and issues |
+| `enter` | open the PR or issue |
 | `c` | open its first failing check |
 | `i` | open its linked issues |
+| `p` | open an issue's linked PRs |
 | `/` | filter by repo, title, author or tag; `esc` clears |
 | `r` | refresh now |
 | `s` | settings |

@@ -112,9 +112,55 @@ func PRs() []model.PR {
 	}
 }
 
+// Issues fills each issue section, with linked PRs and sub-issues.
+func Issues() []model.Issue {
+	return []model.Issue{
+		{
+			Item: model.Item{
+				ID: "I_1", Repo: "acme/widgets", Number: 7, Title: "Loop never ends",
+				URL: "https://github.com/acme/widgets/issues/7", Author: user("alice"), CreatedAt: ago(8 * day),
+				Tags: []model.Tag{model.TagAssigned},
+				Timeline: []model.Event{
+					{Kind: model.EventAssigned, Actor: user("alice"), At: ago(6 * day), Target: "me"},
+					{Kind: model.EventReferenced, Actor: user("me"), At: ago(5 * day)},
+				},
+			},
+			Assignees: []model.Actor{user("me")},
+			Labels:    []string{"bug"},
+			PRs: []model.PRRef{{Repo: "acme/widgets", Number: 42, Title: "Fix reconcile loop when the gateway disappears",
+				URL: "https://github.com/acme/widgets/pull/42", State: "OPEN"}},
+		},
+		{
+			Item: model.Item{
+				ID: "I_2", Repo: "acme/gateway", Number: 1180, Title: "Document weighted backends",
+				URL: "https://github.com/acme/gateway/issues/1180", Author: user("me"), CreatedAt: ago(12 * day),
+				Tags:     []model.Tag{model.TagAuthor},
+				Timeline: []model.Event{{Kind: model.EventComment, Actor: user("bob"), At: ago(10 * day)}},
+			},
+			Labels:    []string{"docs"},
+			SubIssues: model.SubIssues{Total: 3, Completed: 1},
+		},
+		{
+			Item: model.Item{
+				ID: "I_3", Repo: "acme/docs", Number: 90, Title: "Broken link on the install page",
+				URL: "https://github.com/acme/docs/issues/90", Author: user("erin"), CreatedAt: ago(4 * day),
+				Tags: []model.Tag{model.TagMentioned, model.TagCommented},
+				Timeline: []model.Event{
+					{Kind: model.EventComment, Actor: user("me"), At: ago(3 * day)},
+					{Kind: model.EventComment, Actor: user("erin"), At: ago(day)},
+					{Kind: model.EventMentioned, Actor: user("me"), At: ago(day)},
+				},
+			},
+			Assignees: []model.Actor{user("erin")},
+			PRs: []model.PRRef{{Repo: "acme/docs", Number: 91, Title: "Fix the install link",
+				URL: "https://github.com/acme/docs/pull/91", State: "MERGED"}},
+		},
+	}
+}
+
 func State() engine.State {
 	return engine.State{
-		Snapshot: model.Build(PRs(), nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: Now}),
+		Snapshot: model.Build(PRs(), Issues(), model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: Now}),
 		Loaded:   true,
 		Updated:  Now,
 		Next:     Now.Add(time.Minute),

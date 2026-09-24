@@ -70,6 +70,8 @@ func key(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyRight}
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	}
 	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 }
@@ -90,7 +92,7 @@ func (hs *harness) screen() string { return ansi.Strip(hs.m.View().Content) }
 
 func (hs *harness) selected() string {
 	if r := hs.m.current(); r != nil {
-		return r.PR.Ref()
+		return r.Item().Ref()
 	}
 	return ""
 }
@@ -135,6 +137,8 @@ func TestViewGolden(t *testing.T) {
 		{"help", fixture.Failed(), 90, 20, []string{"?"}},
 		{"nothing open", engine.State{Loaded: true, Updated: fixture.Now, Next: fixture.Now.Add(time.Minute)}, 90, 10, nil},
 		{"busy", busyFixture(), 140, 30, nil},
+		{"issues", fixture.State(), 140, 30, []string{"tab"}},
+		{"issues narrow", fixture.State(), 90, 32, []string{"tab"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -356,7 +360,7 @@ func TestFlashClearsOnNewState(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	hs.press("r")
 	hs.send(stateMsg(fixture.State()))
-	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "j/k move") {
+	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "tab issues · j/k move") {
 		t.Fatalf("status = %q", got)
 	}
 }
@@ -395,7 +399,7 @@ func TestEmojiRowsMatchTheRenderer(t *testing.T) {
 func TestHeaderShowsCountsAndActivity(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	got := firstLine(hs.screen())
-	for _, want := range []string{" docket ", "me · 5 open", "Mine 2", "Requested 2", "Mentioned 1", "updated 12:00 · next 12:01"} {
+	for _, want := range []string{" docket ", "me · PRs 5 │ Issues 3", "Mine 2", "Requested 2", "Mentioned 1", "updated 12:00 · next 12:01"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("header lacks %q: %q", want, got)
 		}
@@ -481,4 +485,114 @@ func busyFixture() engine.State {
 	st.Busy = true
 	st.Progress.Phase, st.Progress.Done, st.Progress.Total = "details", 10, 24
 	return st
+}
+
+func TestTabSwitchesBetweenLists(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	hs.press("j")
+	if got := hs.selected(); got != "acme/widgets#42" {
+		t.Fatalf("PR selection = %q", got)
+	}
+	hs.press("tab")
+	if got := hs.selected(); got != "acme/gateway#1180" {
+		t.Fatalf("first issue = %q", got)
+	}
+	screen := hs.screen()
+	for _, want := range []string{"Mine 1", "Assigned 1", "Mentioned 1", "Document weighted backends"} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("issues tab lacks %q", want)
+		}
+	}
+	hs.press("tab")
+	if got := hs.selected(); got != "acme/widgets#42" {
+		t.Fatalf("back on PRs, selected %q, want where it was left", got)
+	}
+	hs.press("shift+tab")
+	if got := hs.selected(); got != "acme/gateway#1180" {
+		t.Fatalf("shift+tab from PRs selected %q", got)
+	}
+}
+
+func TestClickingATabSwitches(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	line := firstLine(hs.screen())
+	i := strings.Index(line, "Issues 3")
+	if i < 0 {
+		t.Fatalf("header = %q", line)
+	}
+	hs.send(click(ansi.StringWidth(line[:i])+2, 0))
+	if hs.m.tab != tabIssues {
+		t.Fatalf("clicked Issues, tab = %d", hs.m.tab)
+	}
+	line = firstLine(hs.screen())
+	hs.send(click(ansi.StringWidth(line[:strings.Index(line, "PRs 5")]), 0))
+	if hs.m.tab != tabPRs {
+		t.Fatalf("clicked PRs, tab = %d", hs.m.tab)
+	}
+}
+
+func TestIssueKeys(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	hs.press("p")
+	if !strings.Contains(hs.screen(), "no linked PRs") {
+		t.Fatal("no flash for p on a PR")
+	}
+	hs.press("tab", "j", "p")
+	if got := hs.selected(); got != "acme/widgets#7" {
+		t.Fatalf("selected %q", got)
+	}
+	if want := []string{"https://github.com/acme/widgets/pull/42"}; !reflect.DeepEqual(hs.opened, want) {
+		t.Fatalf("opened %q, want %q", hs.opened, want)
+	}
+	hs.press("k", "p")
+	if !strings.Contains(hs.screen(), "no linked PRs") {
+		t.Fatal("no flash for an issue without linked PRs")
+	}
+	hs.press("c")
+	if !strings.Contains(hs.screen(), "no failing check to open") {
+		t.Fatal("no flash for c on an issue")
+	}
+	hs.press("i")
+	if !strings.Contains(hs.screen(), "no linked issues") {
+		t.Fatal("no flash for i on an issue")
+	}
+	hs.press("enter")
+	if got := hs.opened[len(hs.opened)-1]; got != "https://github.com/acme/gateway/issues/1180" {
+		t.Fatalf("enter opened %q", got)
+	}
+}
+
+func TestIssueDetailPane(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	hs.press("tab", "j")
+	screen := hs.screen()
+	for _, want := range []string{
+		"╭─ acme/widgets#7 ", "github.com/acme/widgets/issues/7", "What's left", "PR acme/widgets#42 open",
+		"assigned to you 6d ago", "Assignees", "Labels", "bug", "Linked PRs",
+	} {
+		if !strings.Contains(screen, want) {
+			t.Errorf("detail lacks %q:\n%s", want, screen)
+		}
+	}
+}
+
+func TestFilterAppliesToTheTabShowing(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	hs.press("tab", "/")
+	hs.typing("bug")
+	hs.press("enter")
+	if len(hs.m.rows) != 1 || hs.selected() != "acme/widgets#7" {
+		t.Fatalf("label filter: %d rows, selected %q", len(hs.m.rows), hs.selected())
+	}
+	hs.press("tab")
+	if !strings.Contains(hs.screen(), "no matches") {
+		t.Fatalf("PRs under the same filter:\n%s", hs.screen())
+	}
+}
+
+func TestWindowTitleCountsBothLists(t *testing.T) {
+	hs := newHarness(t, fixture.State(), 140, 30)
+	if got := hs.m.View().WindowTitle; got != "docket (8)" {
+		t.Fatalf("title = %q", got)
+	}
 }

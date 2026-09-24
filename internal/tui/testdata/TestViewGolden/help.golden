@@ -1,9 +1,11 @@
- docket  me · 5 open   Mine 2  Requested 2  Mentioned 1     ✗ updated 12:00 · retry 12:02
+ docket  me · PRs 5 │ Issues 3                              ✗ updated 12:00 · retry 12:02
   Keys
   j k ↑ ↓   move
-  enter     open PR
+  tab       next tab; shift+tab goes back
+  enter     open PR or issue
   c         open first failing check
   i         open linked issues
+  p         open linked PRs
   r         refresh now
   s         settings
   /         filter; esc clears
@@ -12,8 +14,6 @@
 
   Warnings
   Resource protected by organization SAML enforcement.
-
-
 
 
 

@@ -1,4 +1,4 @@
- docket  me · 5 open   Mine 2  Requested 2  Mentioned 1                                                          updated 12:00 · next 12:01
+ docket  me · PRs 5 │ Issues 3   Mine 2  Requested 2  Mentioned 1                                                updated 12:00 · next 12:01
    Mine 2  ───────────────────────────────────────────────────────────────────────── ╭─ acme/widgets#51 ───────────────────────────────────╮
 ▌ ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Add rate limit docs                                 │
   ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ github.com/acme/widgets/pull/51                     │
@@ -27,4 +27,4 @@
                                                                                      │                                                     │
                                                                                      │                                                     │
                                                                                      ╰─────────────────────────────────────────────────────╯
-j/k move · enter open · c check · i issues · / filter · r refresh · ? help                                                  budget 4812/5000
+tab issues · j/k move · enter open · c check · i issues · / filter · r refresh · ? help                                     budget 4812/5000

@@ -14,6 +14,7 @@ type styles struct {
 	selected, bar               color.Color
 	kinds                       map[model.LineKind]lipgloss.Style
 	ci                          map[model.CI]lipgloss.Style
+	fix                         map[model.Fix]lipgloss.Style
 	review                      map[string]lipgloss.Style
 }
 
@@ -36,11 +37,13 @@ func newStyles(dark bool) styles {
 		bar:      c("#eaeef2", "#161b22"),
 		kinds:    map[model.LineKind]lipgloss.Style{model.Bad: bad, model.Wait: wait, model.Good: good, model.Info: faint},
 		ci:       map[model.CI]lipgloss.Style{model.CIPass: good, model.CIFail: bad, model.CIRunning: wait, model.CINone: faint},
+		fix:      map[model.Fix]lipgloss.Style{model.FixMerged: good, model.FixOpen: wait, model.FixNone: faint},
 		review:   map[string]lipgloss.Style{"approved": good, "changes": bad, "review": wait},
 	}
 }
 
 var (
-	glyph   = map[model.LineKind]string{model.Bad: "✗", model.Wait: "○", model.Good: "✓", model.Info: "·"}
-	ciGlyph = map[model.CI]string{model.CIPass: "✓", model.CIFail: "✗", model.CIRunning: "●", model.CINone: "·"}
+	glyph    = map[model.LineKind]string{model.Bad: "✗", model.Wait: "○", model.Good: "✓", model.Info: "·"}
+	ciGlyph  = map[model.CI]string{model.CIPass: "✓", model.CIFail: "✗", model.CIRunning: "●", model.CINone: "·"}
+	fixGlyph = map[model.Fix]string{model.FixMerged: "✓", model.FixOpen: "●", model.FixNone: "○"}
 )

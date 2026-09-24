@@ -200,15 +200,17 @@ Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
 ### TUI
 
-Full screen. A header bar carries my login, the open count and a count per section, and on the right either a spinner with the poll's step (`pulling data · details 10/24`) or when it last updated and next will; red, with the last success kept, after a failure. Below it, one list under section badges, and a rounded detail pane to the right (below on narrow terminals) titled with the PR and showing its link. A footer carries messages and errors, else key hints, with the budget on the right. PRs new or changed since the last poll carry a `◆` until visited; the clock ticking ages on doesn't count as change. Columns drop as width shrinks; title and tags go last. Refs, checks and issues are underlined OSC 8 hyperlinks.
+Full screen. A header bar carries my login, a tab per list with its count (`PRs 22 │ Issues 102`), the section counts of the tab showing, and on the right either a spinner with the poll's step (`pulling data · details 10/24`) or when it last updated and next will; red, with the last success kept, after a failure. Below it, the tab's list under section badges, and a rounded detail pane to the right (below on narrow terminals) titled with the PR or issue and showing its link. A footer carries messages and errors, else key hints, with the budget on the right. PRs new or changed since the last poll carry a `◆` until visited; the clock ticking ages on doesn't count as change. Columns drop as width shrinks; title and tags go last. Issues have no review column. The header drops the section counts first, then the tabs. Refs, checks and issues are underlined OSC 8 hyperlinks.
 
 | Key | Action |
 |-|-|
 | `j` `k`, arrows, wheel | move |
-| click | select a row; work the settings panel |
-| `enter` | open PR |
+| `tab` `shift+tab`, or a tab's name in the header | next or previous tab |
+| click | select a row or tab; work the settings panel |
+| `enter` | open PR or issue |
 | `c` | open first failing check |
 | `i` | open linked issues |
+| `p` | open linked PRs |
 | `r` | refresh now |
 | `s`, or `settings` in the header | settings |
 | `/` | filter by text |

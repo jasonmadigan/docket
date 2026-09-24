@@ -1,5 +1,5 @@
- docket  0 open                                                updated 12:00 · next 12:01
-  nothing open involves you
+ docket  PRs 0 │ Issues 0                                      updated 12:00 · next 12:01
+  no open PRs involve you
 
 
 
@@ -7,4 +7,4 @@
 
 
 
-j/k move · enter open · c check · i issues · / filter · r refresh · ? help
+tab issues · j/k move · enter open · c check · i issues · / filter · r refresh · ? help

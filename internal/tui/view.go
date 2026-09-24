@@ -19,13 +19,13 @@ const (
 	minTitle = 20
 )
 
-const hints = "j/k move · enter open · c check · i issues · / filter · r refresh"
-
 var keyHelp = [][2]string{
 	{"j k ↑ ↓", "move"},
-	{"enter", "open PR"},
+	{"tab", "next tab; shift+tab goes back"},
+	{"enter", "open PR or issue"},
 	{"c", "open first failing check"},
 	{"i", "open linked issues"},
+	{"p", "open linked PRs"},
 	{"r", "refresh now"},
 	{"s", "settings"},
 	{"/", "filter; esc clears"},
@@ -64,8 +64,8 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "docket"
-	if m.state.Loaded {
-		v.WindowTitle = fmt.Sprintf("docket (%d)", m.state.Snapshot.PRs.Count)
+	if s := m.state.Snapshot; m.state.Loaded {
+		v.WindowTitle = fmt.Sprintf("docket (%d)", s.PRs.Count+s.Issues.Count)
 	}
 	return v
 }
@@ -128,37 +128,84 @@ func (m Model) centred(text string, h int) string {
 	return m.fit(lines, m.width, h)
 }
 
-// header is the top bar: who, how many, and what the engine is doing.
-func (m Model) header() string {
+// headerParts lays out the top bar: the fullest left side that leaves room
+// for the right, and where each tab name sits when the tabs show.
+func (m Model) headerParts() (left, right string, tabs []zone) {
 	bar := func(s lipgloss.Style) lipgloss.Style { return s.Background(m.st.bar) }
 	plain := bar(lipgloss.NewStyle())
 	s := m.state
-	brand := m.st.badge.Render(" docket ")
-	var who, counts string
-	if s.Loaded {
-		who = plain.Render(fmt.Sprintf(" %d open", s.Snapshot.PRs.Count))
-		if login := s.Snapshot.Login; login != "" {
-			who = plain.Render(" ") + bar(m.st.bold).Render(login) + plain.Render(" ·") + who
-		}
-		var parts []string
-		for _, sec := range s.Snapshot.PRs.Sections {
-			parts = append(parts, bar(m.st.faint).Render(sec.Name+" ")+bar(m.st.bold).Render(fmt.Sprint(len(sec.Rows))))
-		}
-		counts = plain.Render("   ") + strings.Join(parts, plain.Render("  "))
-	}
-	var right string
 	if s.Loaded || s.Err != nil {
 		right = plain.Render(m.activity(bar) + " ")
 	}
 	if m.settings != nil {
 		right += plain.Render(" ") + bar(m.st.link).Render("settings") + plain.Render(" ")
 	}
-	for _, left := range []string{brand + who + counts, brand + who, brand} {
-		if room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right); room >= 1 {
-			return left + plain.Render(strings.Repeat(" ", room)) + right
+	brand := m.st.badge.Render(" docket ")
+	type option struct {
+		text string
+		tabs bool
+	}
+	options := []option{{brand, false}}
+	var zones []zone
+	if s.Loaded {
+		var who, dot string
+		if login := s.Snapshot.Login; login != "" {
+			who, dot = plain.Render(" ")+bar(m.st.bold).Render(login), plain.Render(" ·")
+		}
+		var names strings.Builder
+		x := m.method.StringWidth(brand + who + dot)
+		for t := range tabCount {
+			if t > 0 {
+				names.WriteString(bar(m.st.faint).Render(" │"))
+				x += 2
+			}
+			label := fmt.Sprintf("%s %d", tabNames[t], m.listOf(t).Count)
+			style := m.st.faint
+			if t == m.tab {
+				style = m.st.header
+			}
+			names.WriteString(plain.Render(" ") + bar(style).Render(label))
+			zones = append(zones, zone{x: x + 1, y: 0, w: m.method.StringWidth(label)})
+			x += 1 + m.method.StringWidth(label)
+		}
+		var counts []string
+		for _, sec := range m.listOf(m.tab).Sections {
+			counts = append(counts, bar(m.st.faint).Render(sec.Name+" ")+bar(m.st.bold).Render(fmt.Sprint(len(sec.Rows))))
+		}
+		tabbed := brand + who + dot + names.String()
+		options = []option{
+			{tabbed + plain.Render("   ") + strings.Join(counts, plain.Render("  ")), true},
+			{tabbed, true},
+			{brand + who, false},
+			{brand, false},
 		}
 	}
-	return m.method.Truncate(brand+right, m.width, "")
+	for _, o := range options {
+		if m.width-m.method.StringWidth(o.text)-m.method.StringWidth(right) >= 1 {
+			if o.tabs {
+				return o.text, right, zones
+			}
+			return o.text, right, nil
+		}
+	}
+	return "", right, nil
+}
+
+// header is the top bar: who, the tabs, the sections of the tab showing,
+// and what the engine is doing.
+func (m Model) header() string {
+	left, right, _ := m.headerParts()
+	if left == "" {
+		return m.method.Truncate(m.st.badge.Render(" docket ")+right, m.width, "")
+	}
+	room := m.width - m.method.StringWidth(left) - m.method.StringWidth(right)
+	return left + lipgloss.NewStyle().Background(m.st.bar).Render(strings.Repeat(" ", room)) + right
+}
+
+// tabZones is where the header draws each tab name, when it draws them.
+func (m Model) tabZones() []zone {
+	_, _, zones := m.headerParts()
+	return zones
 }
 
 func (m Model) activity(bar func(lipgloss.Style) lipgloss.Style) string {
@@ -197,11 +244,7 @@ func (m Model) footer() string {
 	}
 	left := strings.Join(parts, " · ")
 	if left == "" {
-		h := hints
-		if m.settings != nil {
-			h += " · s settings"
-		}
-		left = m.st.faint.Render(h + " · ? help")
+		left = m.st.faint.Render(m.hints())
 	}
 	var right string
 	if b := m.state.Budget; b.Limit > 0 {
@@ -214,10 +257,28 @@ func (m Model) footer() string {
 	return left + strings.Repeat(" ", room) + right
 }
 
+// hints are the keys worth knowing on the tab showing.
+func (m Model) hints() string {
+	var parts []string
+	switch m.tab {
+	case tabIssues:
+		parts = []string{"tab PRs", "j/k move", "enter open", "p PRs"}
+	default:
+		parts = []string{"tab issues", "j/k move", "enter open", "c check", "i issues"}
+	}
+	parts = append(parts, "/ filter", "r refresh")
+	if m.settings != nil {
+		parts = append(parts, "s settings")
+	}
+	return strings.Join(append(parts, "? help"), " · ")
+}
+
+var empty = [tabCount]string{"no open PRs involve you", "no open issues involve you"}
+
 func (m Model) list(l layout) string {
 	var lines []string
 	if len(m.rows) == 0 {
-		text := "nothing open involves you"
+		text := empty[m.tab]
 		if m.filter.Value() != "" {
 			text = "no matches"
 		}
@@ -250,15 +311,19 @@ type columns struct {
 }
 
 // fitColumns drops author, review, age, ref and ci in that order until the
-// title gets minTitle, then squeezes tags.
+// title gets minTitle, then squeezes tags. Review shows only beside PRs.
 func fitColumns(method ansi.Method, width int, rows []model.Row, snap model.Snapshot) columns {
-	c := columns{ci: 1, age: 4, review: 8}
+	c := columns{ci: 1, age: 4}
 	for _, r := range rows {
-		c.ref = max(c.ref, method.StringWidth(r.PR.Ref()))
-		if !snap.IsMe(r.PR.Author) {
-			c.author = max(c.author, method.StringWidth(r.PR.Author.Login))
+		it := r.Item()
+		c.ref = max(c.ref, method.StringWidth(it.Ref()))
+		if !snap.IsMe(it.Author) {
+			c.author = max(c.author, method.StringWidth(it.Author.Login))
 		}
-		c.tags = max(c.tags, method.StringWidth(tagList(r.PR.Tags)))
+		c.tags = max(c.tags, method.StringWidth(tagList(it.Tags)))
+		if r.PR != nil {
+			c.review = 8
+		}
 	}
 	c.ref, c.author, c.tags = min(c.ref, 30), min(c.author, 14), min(c.tags, 24)
 	for _, drop := range []*int{&c.author, &c.review, &c.age, &c.ref, &c.ci} {
@@ -294,7 +359,8 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 	}
 	gap := paint(lipgloss.NewStyle()).Render(" ")
 	snap := m.state.Snapshot
-	changed := m.changed[r.PR.ID]
+	it := r.Item()
+	changed := m.changed[it.ID]
 	var b strings.Builder
 	switch {
 	case selected:
@@ -309,27 +375,36 @@ func (m Model) rowLine(r model.Row, c columns, selected bool) string {
 			b.WriteString(paint(s).Render(text) + gap)
 		}
 	}
-	lead(ciGlyph[r.CI], c.ci, m.st.ci[r.CI])
+	g, gs := m.glyph(r)
+	lead(g, c.ci, gs)
 	lead(m.padLeft(snap.Since(r.Activity), c.age), c.age, m.st.faint)
-	lead(m.pad(r.PR.Ref(), c.ref), c.ref, linked(m.st.faint, r.PR.URL))
-	title := linked(lipgloss.NewStyle(), r.PR.URL)
+	lead(m.pad(it.Ref(), c.ref), c.ref, linked(m.st.faint, it.URL))
+	title := linked(lipgloss.NewStyle(), it.URL)
 	if changed {
 		title = title.Bold(true)
 	}
-	b.WriteString(paint(title).Render(m.pad(r.PR.Title, c.title)))
+	b.WriteString(paint(title).Render(m.pad(it.Title, c.title)))
 	trail := func(text string, width int, s lipgloss.Style) {
 		if width > 0 {
 			b.WriteString(gap + paint(s).Render(m.pad(text, width)))
 		}
 	}
 	trail(r.Review, c.review, m.st.review[r.Review])
-	author := r.PR.Author.Login
-	if snap.IsMe(r.PR.Author) {
+	author := it.Author.Login
+	if snap.IsMe(it.Author) {
 		author = ""
 	}
 	trail(author, c.author, m.st.faint)
-	trail(tagList(r.PR.Tags), c.tags, m.st.accent)
+	trail(tagList(it.Tags), c.tags, m.st.accent)
 	return b.String()
+}
+
+// glyph is ci for a pr, and for an issue the state of its linked prs.
+func (m Model) glyph(r model.Row) (string, lipgloss.Style) {
+	if r.Issue != nil {
+		return fixGlyph[r.Fix], m.st.fix[r.Fix]
+	}
+	return ciGlyph[r.CI], m.st.ci[r.CI]
 }
 
 func (m Model) detail(w, h int) string {
@@ -337,14 +412,14 @@ func (m Model) detail(w, h int) string {
 	if r == nil || w < 8 || h < 3 {
 		return m.fit(nil, w, h)
 	}
-	pr := r.PR
+	it := r.Item()
 	inner := w - 4
 	var lines []string
-	for _, l := range strings.Split(m.method.Wordwrap(pr.Title, inner, ""), "\n") {
+	for _, l := range strings.Split(m.method.Wordwrap(it.Title, inner, ""), "\n") {
 		lines = append(lines, m.st.bold.Render(l))
 	}
 	lines = append(lines,
-		linked(m.st.link, pr.URL).Render(strings.TrimPrefix(pr.URL, "https://")),
+		linked(m.st.link, it.URL).Render(strings.TrimPrefix(it.URL, "https://")),
 		m.st.faint.Render(m.state.Snapshot.Meta(*r)),
 		m.st.accent.Render(strings.Join(r.Labels(), ", ")),
 	)
@@ -355,21 +430,39 @@ func (m Model) detail(w, h int) string {
 	}
 	block("What's left", m.facts(r.Left))
 	block("You", m.facts(r.Mine))
-	var checks, reviewers, issues []string
-	for _, c := range pr.Checks.Failing {
-		checks = append(checks, "  "+m.st.kinds[model.Bad].Render(glyph[model.Bad])+" "+linked(m.st.link, c.URL).Render(c.Name))
+	if pr := r.PR; pr != nil {
+		var checks, reviewers, issues []string
+		for _, c := range pr.Checks.Failing {
+			checks = append(checks, "  "+m.st.kinds[model.Bad].Render(glyph[model.Bad])+" "+linked(m.st.link, c.URL).Render(c.Name))
+		}
+		for _, rv := range model.Reviewers(*pr) {
+			reviewers = append(reviewers, "  "+rv.Name+" "+m.st.faint.Render(rv.State))
+		}
+		for _, is := range pr.Issues {
+			ref := linked(m.st.link, is.URL).Render(fmt.Sprintf("%s#%d", is.Repo, is.Number))
+			issues = append(issues, "  "+ref+" "+is.Title+" "+m.st.faint.Render(strings.ToLower(is.State)))
+		}
+		block("Failing checks", checks)
+		block("Reviewers", reviewers)
+		block("Linked issues", issues)
 	}
-	for _, rv := range model.Reviewers(*pr) {
-		reviewers = append(reviewers, "  "+rv.Name+" "+m.st.faint.Render(rv.State))
+	if is := r.Issue; is != nil {
+		var assignees, labels, prs []string
+		for _, a := range is.Assignees {
+			assignees = append(assignees, "  "+a.Login)
+		}
+		if len(is.Labels) > 0 {
+			labels = []string{"  " + strings.Join(is.Labels, ", ")}
+		}
+		for _, pr := range is.PRs {
+			ref := linked(m.st.link, pr.URL).Render(pr.Ref())
+			prs = append(prs, "  "+ref+" "+pr.Title+" "+m.st.faint.Render(pr.Status()))
+		}
+		block("Assignees", assignees)
+		block("Labels", labels)
+		block("Linked PRs", prs)
 	}
-	for _, is := range pr.Issues {
-		ref := linked(m.st.link, is.URL).Render(fmt.Sprintf("%s#%d", is.Repo, is.Number))
-		issues = append(issues, "  "+ref+" "+is.Title+" "+m.st.faint.Render(strings.ToLower(is.State)))
-	}
-	block("Failing checks", checks)
-	block("Reviewers", reviewers)
-	block("Linked issues", issues)
-	title := linked(m.st.header, pr.URL).Render(pr.Ref())
+	title := linked(m.st.header, it.URL).Render(it.Ref())
 	return m.box(title, lines, w, h)
 }
 

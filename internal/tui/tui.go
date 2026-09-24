@@ -42,6 +42,20 @@ type (
 	flashMsg string
 )
 
+const (
+	tabPRs = iota
+	tabIssues
+	tabCount
+)
+
+var tabNames = [tabCount]string{"PRs", "Issues"}
+
+// place is where a tab was left while another shows.
+type place struct {
+	cursor, offset int
+	selected       string
+}
+
 type Model struct {
 	states  <-chan engine.State
 	refresh func()
@@ -54,6 +68,8 @@ type Model struct {
 	cursor    int
 	selected  string // pr id under the cursor, kept across refreshes
 	offset    int    // first list line in view
+	tab       int
+	places    [tabCount]place
 	width     int
 	height    int
 	filter    textinput.Model
@@ -229,6 +245,10 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.move(1)
 	case "k", "up":
 		m.move(-1)
+	case "tab":
+		m.switchTab(m.tab + 1)
+	case "shift+tab":
+		m.switchTab(m.tab - 1)
 	case "r":
 		m.refresh()
 		m.flash = "refreshing"
@@ -249,15 +269,17 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		if row != nil {
-			return m, m.open(row.PR.URL)
+			return m, m.open(row.Item().URL)
 		}
 	case "c":
 		if row == nil {
 			break
 		}
-		for _, c := range row.PR.Checks.Failing {
-			if c.URL != "" {
-				return m, m.open(c.URL)
+		if row.PR != nil {
+			for _, c := range row.PR.Checks.Failing {
+				if c.URL != "" {
+					return m, m.open(c.URL)
+				}
 			}
 		}
 		m.flash = "no failing check to open"
@@ -265,13 +287,26 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if row == nil {
 			break
 		}
-		if len(row.PR.Issues) == 0 {
+		if row.PR == nil || len(row.PR.Issues) == 0 {
 			m.flash = "no linked issues"
 			break
 		}
 		urls := make([]string, len(row.PR.Issues))
 		for i, is := range row.PR.Issues {
 			urls[i] = is.URL
+		}
+		return m, m.open(urls...)
+	case "p":
+		if row == nil {
+			break
+		}
+		if row.Issue == nil || len(row.Issue.PRs) == 0 {
+			m.flash = "no linked PRs"
+			break
+		}
+		urls := make([]string, len(row.Issue.PRs))
+		for i, pr := range row.Issue.PRs {
+			urls[i] = pr.URL
 		}
 		return m, m.open(urls...)
 	}
@@ -297,14 +332,16 @@ func (m Model) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// rebuild applies the filter, keeping the selected pr under the cursor
-// while it survives.
+// rebuild applies the filter to the tab showing, keeping the selected row
+// under the cursor while it survives.
 func (m *Model) rebuild() {
 	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	present := map[string]bool{}
-	for _, sec := range m.state.Snapshot.PRs.Sections {
-		for _, r := range sec.Rows {
-			present[r.PR.ID] = true
+	for t := range tabCount {
+		for _, sec := range m.listOf(t).Sections {
+			for _, r := range sec.Rows {
+				present[r.Item().ID] = true
+			}
 		}
 	}
 	for id := range m.changed {
@@ -313,7 +350,7 @@ func (m *Model) rebuild() {
 		}
 	}
 	m.groups, m.rows = nil, nil
-	for _, sec := range m.state.Snapshot.PRs.Sections {
+	for _, sec := range m.listOf(m.tab).Sections {
 		g := model.Section{Name: sec.Name}
 		for _, r := range sec.Rows {
 			if query == "" || strings.Contains(haystack(r), query) {
@@ -327,7 +364,7 @@ func (m *Model) rebuild() {
 	}
 	m.cursor = min(m.cursor, max(len(m.rows)-1, 0))
 	for i, r := range m.rows {
-		if r.PR.ID == m.selected {
+		if r.Item().ID == m.selected {
 			m.cursor = i
 			break
 		}
@@ -337,14 +374,18 @@ func (m *Model) rebuild() {
 }
 
 func haystack(r model.Row) string {
-	parts := append([]string{r.PR.Ref(), r.PR.Title, r.PR.Author.Login}, r.Labels()...)
+	it := r.Item()
+	parts := append([]string{it.Ref(), it.Title, it.Author.Login}, r.Labels()...)
+	if r.Issue != nil {
+		parts = append(parts, r.Issue.Labels...)
+	}
 	return strings.ToLower(strings.Join(parts, " "))
 }
 
 func (m *Model) remember() {
 	m.selected = ""
 	if m.cursor < len(m.rows) {
-		m.selected = m.rows[m.cursor].PR.ID
+		m.selected = m.rows[m.cursor].Item().ID
 		delete(m.changed, m.selected)
 	}
 }
@@ -368,6 +409,24 @@ func (m Model) current() *model.Row {
 		return &m.rows[m.cursor]
 	}
 	return nil
+}
+
+// listOf is the snapshot's list behind tab t.
+func (m Model) listOf(t int) model.List {
+	switch t {
+	case tabIssues:
+		return m.state.Snapshot.Issues
+	}
+	return m.state.Snapshot.PRs
+}
+
+// switchTab shows tab t, back where it was left.
+func (m *Model) switchTab(t int) {
+	m.places[m.tab] = place{m.cursor, m.offset, m.selected}
+	m.tab = (t + tabCount) % tabCount
+	p := m.places[m.tab]
+	m.cursor, m.offset, m.selected = p.cursor, p.offset, p.selected
+	m.rebuild()
 }
 
 func (m Model) listLength() int {
@@ -522,6 +581,12 @@ func (m Model) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if m.settings != nil && m.headerButton().hit(x, y) {
 		m.openSettings()
 		return m, nil
+	}
+	for t, z := range m.tabZones() {
+		if z.hit(x, y) {
+			m.switchTab(t)
+			return m, nil
+		}
 	}
 	if m.help || m.filtering || !m.state.Loaded {
 		return m, nil
