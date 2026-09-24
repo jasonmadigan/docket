@@ -28,6 +28,7 @@ type Row struct {
 	Review   string    `json:"review,omitempty"`
 	Left     []Line    `json:"left"`
 	Mine     []Line    `json:"mine,omitempty"`
+	Archived time.Time `json:"archived,omitzero"`
 }
 
 // Item is what the row's pull request or issue shares with the other kind.
@@ -50,17 +51,20 @@ type List struct {
 }
 
 type Snapshot struct {
-	Login  string    `json:"login"`
-	At     time.Time `json:"at"`
-	PRs    List      `json:"prs"`
-	Issues List      `json:"issues"`
+	Login    string    `json:"login"`
+	At       time.Time `json:"at"`
+	PRs      List      `json:"prs"`
+	Issues   List      `json:"issues"`
+	Archived List      `json:"archived"`
+	Void     []string  `json:"-"` // archived, then reopened: the archive no longer holds
 }
 
 type Params struct {
-	Login  string
-	Teams  []string
-	Ignore []string
-	Now    time.Time
+	Login   string
+	Teams   []string
+	Ignore  []string
+	Archive map[string]time.Time // node id to when it was archived
+	Now     time.Time
 }
 
 type group struct {
@@ -111,7 +115,21 @@ func Build(prs []PR, issues []Issue, p Params) Snapshot {
 			Mine:     issueMine(is, people, p.Now),
 		})
 	}
-	return Snapshot{Login: p.Login, At: p.Now, PRs: file(prRows, prGroups), Issues: file(issueRows, issueGroups)}
+	unfiled := func(groups []group) func(Row) bool {
+		return func(r Row) bool { return groupOf(r.Item().Tags, groups) < 0 }
+	}
+	prRows = slices.DeleteFunc(prRows, unfiled(prGroups))
+	issueRows = slices.DeleteFunc(issueRows, unfiled(issueGroups))
+	prRows, shelvedPRs, voidPRs := shelve(prRows, p.Archive)
+	issueRows, shelvedIssues, voidIssues := shelve(issueRows, p.Archive)
+	return Snapshot{
+		Login:    p.Login,
+		At:       p.Now,
+		PRs:      file(prRows, prGroups),
+		Issues:   file(issueRows, issueGroups),
+		Archived: shelf(shelvedPRs, shelvedIssues),
+		Void:     slices.Concat(voidPRs, voidIssues),
+	}
 }
 
 // file puts each row under the first group its tags match, longest
@@ -212,6 +230,9 @@ func (s Snapshot) Meta(r Row) string {
 	if !r.Activity.IsZero() {
 		parts = append(parts, "touched "+s.Since(r.Activity)+" ago")
 	}
+	if !r.Archived.IsZero() {
+		parts = append(parts, "archived "+s.Since(r.Archived)+" ago")
+	}
 	return strings.Join(parts, " · ")
 }
 
@@ -249,4 +270,73 @@ func (r Row) Fingerprint() string {
 		}
 	}
 	return strings.Join(parts, "\x1f")
+}
+
+// shelve takes archived rows out of rows, unless a reopening since has
+// ended the archive, and says whose archive has ended.
+func shelve(rows []Row, archive map[string]time.Time) (kept, archived []Row, void []string) {
+	for _, r := range rows {
+		it := r.Item()
+		at, ok := archive[it.ID]
+		switch {
+		case ok && !reopenedSince(it, at):
+			r.Archived = at
+			archived = append(archived, r)
+		case ok:
+			void = append(void, it.ID)
+			kept = append(kept, r)
+		default:
+			kept = append(kept, r)
+		}
+	}
+	return kept, archived, void
+}
+
+// reopenedSince is true when anyone reopened it after at, which ends an
+// archive.
+func reopenedSince(it Item, at time.Time) bool {
+	for _, e := range it.Timeline {
+		if e.Kind == EventReopened && e.At.After(at) {
+			return true
+		}
+	}
+	return false
+}
+
+// shelf lists archived rows by kind, newest archived first.
+func shelf(prs, issues []Row) List {
+	var l List
+	for _, g := range []struct {
+		name string
+		rows []Row
+	}{{"Pull requests", prs}, {"Issues", issues}} {
+		if len(g.rows) == 0 {
+			continue
+		}
+		slices.SortStableFunc(g.rows, byArchived)
+		l.Sections = append(l.Sections, Section{Name: g.name, Rows: g.rows})
+		l.Count += len(g.rows)
+	}
+	return l
+}
+
+func byArchived(a, b Row) int {
+	x, y := a.Item(), b.Item()
+	return cmp.Or(
+		b.Archived.Compare(a.Archived),
+		strings.Compare(x.Repo, y.Repo),
+		cmp.Compare(x.Number, y.Number),
+	)
+}
+
+// Find is the row for id, if the list holds it.
+func (l List) Find(id string) (Row, bool) {
+	for _, sec := range l.Sections {
+		for _, r := range sec.Rows {
+			if r.Item().ID == id {
+				return r, true
+			}
+		}
+	}
+	return Row{}, false
 }

@@ -8,9 +8,9 @@ An always-open view of every open GitHub pull request and issue I'm involved in:
 
 - Open PR or issue: listed. Closed or merged: gone.
 - No stale threshold. Nothing is demoted for being old: every row shows its age, and the longest-neglected sort first so they get noticed rather than die.
-- No dismiss, snooze, mute or other marks. The only thing written to disk is settings.
+- One mark, archive: local, and it lasts until I unarchive the item or it closes. No dismiss, snooze or mute. The only thing written to disk is settings, archive.toml and config.toml.
 - github.com only, every org, no allowlist.
-- Read-only. The only action is opening things in the browser.
+- Read-only on GitHub. The actions are opening things in the browser and archiving them locally.
 - TUI and web both ship. Each runs the engine in-process. With no state, two copies running at once can't conflict; they only double a cheap poll.
 - Go, single binary `docket`, auth borrowed from `gh`.
 - macOS 26 on Apple silicon is the main platform, in Terminal.app or iTerm2. Linux works too, including over SSH.
@@ -139,6 +139,12 @@ The assignment's age goes once its event leaves the timeline window. The mention
 
 The latest opening, comment, assignment, cross-reference or reopening by a person, by the same rule as PRs.
 
+## Archive
+
+Any PR or issue can be archived. It leaves its section for the Archived list, `Pull requests` then `Issues`, newest archived first, and stays there until I unarchive it or it closes. A reopening newer than the archive ends it, and the item returns to its section. Nothing changes on GitHub.
+
+Archived items are still fetched, so their rows stay whole and unarchiving shows one at once. Counts and titles leave them out.
+
 ## Architecture
 
 ```text
@@ -195,7 +201,7 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
-`dump --json` prints the snapshot: `login` and `at`, then `prs` and `issues`, each a `count` and its `sections`, whose rows hold a `pr` or an `issue`.
+`dump --json` prints the snapshot: `login` and `at`, then `prs`, `issues` and `archived`, each a `count` and its `sections`, whose rows hold a `pr` or an `issue`; an archived row also says when it was archived.
 
 
 ### TUI
@@ -269,4 +275,4 @@ ignore_actors = ["codecov", "openshift-ci-robot"]
 
 ## Out of scope
 
-Write actions (merge, approve, re-run), desktop notifications, Jira, GitHub Enterprise, several accounts, marks, history.
+Write actions on GitHub (merge, approve, re-run), desktop notifications, Jira, GitHub Enterprise, several accounts, snooze, history.
