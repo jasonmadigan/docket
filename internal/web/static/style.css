@@ -86,11 +86,13 @@ h2 {
   font-weight: normal;
 }
 
-details.pr {
+details.pr,
+details.issue {
   border-top: 1px solid var(--line);
 }
 
-details.pr:last-child {
+details.pr:last-child,
+details.issue:last-child {
   border-bottom: 1px solid var(--line);
 }
 
@@ -165,6 +167,21 @@ summary:hover {
 }
 
 .ci-running::before {
+  content: "●";
+  color: var(--wait);
+}
+
+.fix::before {
+  content: "○";
+  color: var(--muted);
+}
+
+.fix-merged::before {
+  content: "✓";
+  color: var(--good);
+}
+
+.fix-open::before {
   content: "●";
   color: var(--wait);
 }
@@ -251,6 +268,35 @@ summary:hover {
   color: var(--fg);
 }
 
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tabs a {
+  padding: 0 8px;
+  border-radius: 10px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.tabs a b {
+  color: var(--fg);
+}
+
+.tabs a[aria-current] {
+  background: var(--raised);
+  color: var(--accent);
+}
+
+.labels {
+  margin: 0;
+}
+
+.labels .tag {
+  margin: 0 4px 0 0;
+}
+
 .activity {
   margin-left: auto;
   color: var(--muted);
@@ -277,7 +323,8 @@ summary:hover {
   }
 }
 
-details.pr.changed > summary {
+details.pr.changed > summary,
+details.issue.changed > summary {
   animation: changed 12s ease-out;
 }
 
@@ -289,7 +336,8 @@ details.pr.changed > summary {
 
 @media (prefers-reduced-motion: reduce) {
   .spinner,
-  details.pr.changed > summary {
+  details.pr.changed > summary,
+  details.issue.changed > summary {
     animation: none;
   }
 }

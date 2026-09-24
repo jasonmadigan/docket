@@ -6,8 +6,11 @@
 <button type="button" class="settings-button" data-open-settings>Settings</button>
 {{- end}}
 {{- if .Loaded}}
-<p class="who">{{with .Login}}<b>{{.}}</b> · {{end}}{{.Count}} open</p>
-<p class="counts">{{range .Counts}}<span class="pill">{{.Name}} <b>{{.N}}</b></span>{{end}}</p>
+{{- with .Login}}
+<p class="who"><b>{{.}}</b></p>
+{{- end}}
+<nav class="tabs">{{range .Tabs}}<a href="#{{.Key}}" data-tab="{{.Key}}"{{if not .Hidden}} aria-current="page"{{end}}>{{.Name}} <b>{{.Count}}</b></a>{{end}}</nav>
+<p class="counts">{{range .Tabs}}<span data-tab="{{.Key}}"{{if .Hidden}} hidden{{end}}>{{range .Sections}}<span class="pill">{{.Name}} <b>{{len .Rows}}</b></span>{{end}}</span>{{end}}</p>
 {{- end}}
 <p class="activity{{if .Busy}} busy{{else if .Err}} failed{{end}}">
 {{- if .Busy}}<span class="spinner" aria-hidden="true"></span>pulling data · {{.Phase}}
@@ -22,13 +25,29 @@
 <p class="warning">{{.}}</p>
 {{- end}}
 </header>
+{{- if .Loaded}}
+{{- range .Tabs}}
+<div class="list" data-tab="{{.Key}}"{{if .Hidden}} hidden{{end}}>
 {{- range .Sections}}
 <section>
 <h2>{{.Name}} <span class="count">{{len .Rows}}</span></h2>
 {{- range .Rows}}
-<details class="pr{{if .Changed}} changed{{end}}" data-id="{{.ID}}">
+{{template "row" .}}
+{{- end}}
+</section>
+{{- else}}
+<p class="empty">{{.Empty}}</p>
+{{- end}}
+</div>
+{{- end}}
+{{- end}}
+</div>
+{{- end}}
+
+{{define "row" -}}
+<details class="{{.Kind}}{{if .Changed}} changed{{end}}" data-id="{{.ID}}">
 <summary>
-<span class="ci ci-{{.CI}}" title="{{.CILabel}}" aria-label="{{.CILabel}}"></span>
+<span class="{{.Glyph}}" title="{{.GlyphLabel}}" aria-label="{{.GlyphLabel}}"></span>
 <span class="age">{{.Age}}</span>
 {{if .URL}}<a class="ref" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>{{else}}<span class="ref">{{.Ref}}</span>{{end}}
 <span class="title">{{.Title}}</span>
@@ -62,16 +81,20 @@
 <h3>Linked issues</h3>
 <ul>{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Repo}}#{{.Number}}</a>{{else}}{{.Repo}}#{{.Number}}{{end}} {{.Title}} <span class="muted">{{lower .State}}</span></li>{{end}}</ul>
 {{- end}}
+{{- with .Assignees}}
+<h3>Assignees</h3>
+<ul>{{range .}}<li>{{.}}</li>{{end}}</ul>
+{{- end}}
+{{- with .Labels}}
+<h3>Labels</h3>
+<p class="labels">{{range .}}<span class="tag">{{.}}</span>{{end}}</p>
+{{- end}}
+{{- with .PRs}}
+<h3>Linked PRs</h3>
+<ul>{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>{{else}}{{.Ref}}{{end}} {{.Title}} <span class="muted">{{.Status}}</span></li>{{end}}</ul>
+{{- end}}
 </div>
 </details>
-{{- end}}
-</section>
-{{- else}}
-{{- if .Loaded}}
-<p class="empty">Nothing open involves you.</p>
-{{- end}}
-{{- end}}
-</div>
 {{- end}}
 
 {{define "lines" -}}

@@ -1,5 +1,23 @@
 const main = document.getElementById("sections");
 
+// the fragment names the tab to show; anything else shows the first
+function showTab() {
+  const tabs = Array.from(document.querySelectorAll(".tabs a"), (a) => a.dataset.tab);
+  const want = location.hash.slice(1);
+  const tab = tabs.includes(want) ? want : tabs[0];
+  for (const el of document.querySelectorAll("[data-tab]")) {
+    if (el.closest(".tabs")) {
+      if (el.dataset.tab === tab) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    } else {
+      el.hidden = el.dataset.tab !== tab;
+    }
+  }
+}
+
+window.addEventListener("hashchange", showTab);
+showTab();
+
 async function refresh() {
   const open = new Set(
     Array.from(main.querySelectorAll("details[open]"), (d) => d.dataset.id),
@@ -8,6 +26,7 @@ async function refresh() {
   const res = await fetch("/sections", { cache: "no-store" });
   if (!res.ok) return;
   main.innerHTML = await res.text();
+  showTab();
   for (const d of main.querySelectorAll("details")) {
     if (open.has(d.dataset.id)) d.open = true;
   }

@@ -15,8 +15,6 @@ type pageView struct {
 	Title        string
 	Loaded       bool
 	Login        string
-	Count        int
-	Counts       []count
 	Busy         bool
 	Phase        string
 	Updated      string
@@ -24,12 +22,17 @@ type pageView struct {
 	Budget       string
 	Err          string
 	Warnings     []string
-	Sections     []sectionView
+	Tabs         []tabView
 }
 
-type count struct {
-	Name string
-	N    int
+// tabView is one list; app.js shows the one the url fragment names.
+type tabView struct {
+	Key      string
+	Name     string
+	Count    int
+	Hidden   bool
+	Empty    string
+	Sections []sectionView
 }
 
 type sectionView struct {
@@ -38,23 +41,31 @@ type sectionView struct {
 }
 
 type rowView struct {
-	ID        string
-	Changed   bool
-	URL       string
-	Ref       string
-	Title     string
-	Author    string
-	Tags      []string
-	CI        model.CI
-	CILabel   string
-	Review    string
-	Age       string
-	Meta      string
-	Left      []model.Line
-	Mine      []model.Line
-	Failing   []model.Check
-	Reviewers []model.ReviewerState
-	Issues    []model.IssueRef
+	ID         string
+	Kind       string // pr or issue
+	Changed    bool
+	URL        string
+	Ref        string
+	Title      string
+	Author     string
+	Tags       []string
+	Glyph      string // css classes: ci for a pr, fix for an issue
+	GlyphLabel string
+	Review     string
+	Age        string
+	Meta       string
+	Left       []model.Line
+	Mine       []model.Line
+	Failing    []model.Check
+	Reviewers  []model.ReviewerState
+	Issues     []model.IssueRef
+	Assignees  []string
+	Labels     []string
+	PRs        []linkedPR
+}
+
+type linkedPR struct {
+	Ref, Title, URL, Status string
 }
 
 var ciLabels = map[model.CI]string{
@@ -64,16 +75,18 @@ var ciLabels = map[model.CI]string{
 	model.CINone:    "no CI",
 }
 
+var fixLabels = map[model.Fix]string{
+	model.FixMerged: "linked PR merged",
+	model.FixOpen:   "linked PR open",
+	model.FixNone:   "no linked PR",
+}
+
 func view(st engine.State, loc *time.Location) pageView {
 	snap := st.Snapshot
 	v := pageView{Title: "docket", Loaded: st.Loaded, Login: snap.Login, Warnings: st.Warnings}
 	if st.Loaded {
-		v.Title = fmt.Sprintf("docket (%d)", snap.PRs.Count)
-		v.Count = snap.PRs.Count
+		v.Title = fmt.Sprintf("docket (%d)", snap.PRs.Count+snap.Issues.Count)
 		v.Updated = st.Updated.In(loc).Format("15:04")
-		for _, sec := range snap.PRs.Sections {
-			v.Counts = append(v.Counts, count{Name: sec.Name, N: len(sec.Rows)})
-		}
 	}
 	if v.Busy = st.Busy || (!st.Loaded && st.Err == nil); v.Busy {
 		v.Phase = phase(st.Progress.Phase, st.Progress.Done, st.Progress.Total)
@@ -91,14 +104,24 @@ func view(st engine.State, loc *time.Location) pageView {
 	for _, id := range st.Changed {
 		changed[id] = true
 	}
-	for _, sec := range snap.PRs.Sections {
-		sv := sectionView{Name: sec.Name}
-		for _, r := range sec.Rows {
-			row := rowOf(r, snap)
-			row.Changed = changed[row.ID]
-			sv.Rows = append(sv.Rows, row)
+	for i, t := range []struct {
+		key, name, empty string
+		list             model.List
+	}{
+		{"prs", "Pull requests", "No open PRs involve you.", snap.PRs},
+		{"issues", "Issues", "No open issues involve you.", snap.Issues},
+	} {
+		tv := tabView{Key: t.key, Name: t.name, Count: t.list.Count, Hidden: i > 0, Empty: t.empty}
+		for _, sec := range t.list.Sections {
+			sv := sectionView{Name: sec.Name}
+			for _, r := range sec.Rows {
+				row := rowOf(r, snap)
+				row.Changed = changed[row.ID]
+				sv.Rows = append(sv.Rows, row)
+			}
+			tv.Sections = append(tv.Sections, sv)
 		}
-		v.Sections = append(v.Sections, sv)
+		v.Tabs = append(v.Tabs, tv)
 	}
 	return v
 }
@@ -114,30 +137,42 @@ func phase(name string, done, total int) string {
 }
 
 func rowOf(r model.Row, snap model.Snapshot) rowView {
+	it := r.Item()
 	v := rowView{
-		ID:        r.PR.ID,
-		URL:       webOnly(r.PR.URL),
-		Ref:       r.PR.Ref(),
-		Title:     r.PR.Title,
-		Tags:      r.Labels(),
-		CI:        r.CI,
-		CILabel:   ciLabels[r.CI],
-		Review:    r.Review,
-		Age:       snap.Since(r.Activity),
-		Meta:      snap.Meta(r),
-		Left:      webLines(r.Left),
-		Mine:      webLines(r.Mine),
-		Reviewers: model.Reviewers(*r.PR),
+		ID:     it.ID,
+		URL:    webOnly(it.URL),
+		Ref:    it.Ref(),
+		Title:  it.Title,
+		Tags:   r.Labels(),
+		Review: r.Review,
+		Age:    snap.Since(r.Activity),
+		Meta:   snap.Meta(r),
+		Left:   webLines(r.Left),
+		Mine:   webLines(r.Mine),
 	}
-	for _, c := range r.PR.Checks.Failing {
-		v.Failing = append(v.Failing, model.Check{Name: c.Name, URL: webOnly(c.URL)})
+	if !snap.IsMe(it.Author) {
+		v.Author = it.Author.Login
 	}
-	for _, is := range r.PR.Issues {
-		is.URL = webOnly(is.URL)
-		v.Issues = append(v.Issues, is)
+	if pr := r.PR; pr != nil {
+		v.Kind, v.Glyph, v.GlyphLabel = "pr", "ci ci-"+string(r.CI), ciLabels[r.CI]
+		v.Reviewers = model.Reviewers(*pr)
+		for _, c := range pr.Checks.Failing {
+			v.Failing = append(v.Failing, model.Check{Name: c.Name, URL: webOnly(c.URL)})
+		}
+		for _, is := range pr.Issues {
+			is.URL = webOnly(is.URL)
+			v.Issues = append(v.Issues, is)
+		}
 	}
-	if !snap.IsMe(r.PR.Author) {
-		v.Author = r.PR.Author.Login
+	if is := r.Issue; is != nil {
+		v.Kind, v.Glyph, v.GlyphLabel = "issue", "fix fix-"+string(r.Fix), fixLabels[r.Fix]
+		v.Labels = is.Labels
+		for _, a := range is.Assignees {
+			v.Assignees = append(v.Assignees, a.Login)
+		}
+		for _, pr := range is.PRs {
+			v.PRs = append(v.PRs, linkedPR{Ref: pr.Ref(), Title: pr.Title, URL: webOnly(pr.URL), Status: pr.Status()})
+		}
 	}
 	return v
 }

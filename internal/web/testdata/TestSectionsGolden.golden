@@ -1,10 +1,12 @@
-<div class="docket" data-title="docket (5)">
+<div class="docket" data-title="docket (8)">
 <header>
 <h1>docket</h1>
-<p class="who"><b>me</b> · 5 open</p>
-<p class="counts"><span class="pill">Mine <b>2</b></span><span class="pill">Requested <b>2</b></span><span class="pill">Mentioned <b>1</b></span></p>
+<p class="who"><b>me</b></p>
+<nav class="tabs"><a href="#prs" data-tab="prs" aria-current="page">Pull requests <b>5</b></a><a href="#issues" data-tab="issues">Issues <b>3</b></a></nav>
+<p class="counts"><span data-tab="prs"><span class="pill">Mine <b>2</b></span><span class="pill">Requested <b>2</b></span><span class="pill">Mentioned <b>1</b></span></span><span data-tab="issues" hidden><span class="pill">Mine <b>1</b></span><span class="pill">Assigned <b>1</b></span><span class="pill">Mentioned <b>1</b></span></span></p>
 <p class="activity">updated 12:00 · next 12:01 · budget 4812/5000</p>
 </header>
+<div class="list" data-tab="prs">
 <section>
 <h2>Mine <span class="count">2</span></h2>
 <details class="pr" data-id="PR_2">
@@ -136,4 +138,92 @@
 </div>
 </details>
 </section>
+</div>
+<div class="list" data-tab="issues" hidden>
+<section>
+<h2>Mine <span class="count">1</span></h2>
+<details class="issue" data-id="I_2">
+<summary>
+<span class="fix fix-none" title="no linked PR" aria-label="no linked PR"></span>
+<span class="age">10d</span>
+<a class="ref" href="https://github.com/acme/gateway/issues/1180" target="_blank" rel="noopener noreferrer">acme/gateway#1180</a>
+<span class="title">Document weighted backends</span>
+<span class="tags"><span class="tag">author</span></span>
+</summary>
+<div class="detail">
+<p class="meta">opened 12d ago · touched 10d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-wait">1 of 3 sub-issues completed</li>
+<li class="line-info">unassigned</li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">1 reply since yours</li>
+</ul>
+<h3>Labels</h3>
+<p class="labels"><span class="tag">docs</span></p>
+</div>
+</details>
+</section>
+<section>
+<h2>Assigned <span class="count">1</span></h2>
+<details class="issue" data-id="I_1">
+<summary>
+<span class="fix fix-open" title="linked PR open" aria-label="linked PR open"></span>
+<span class="age">5d</span>
+<a class="ref" href="https://github.com/acme/widgets/issues/7" target="_blank" rel="noopener noreferrer">acme/widgets#7</a>
+<span class="title">Loop never ends</span>
+<span class="author">alice</span>
+<span class="tags"><span class="tag">assigned</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by alice · opened 8d ago · touched 5d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-wait"><a href="https://github.com/acme/widgets/pull/42" target="_blank" rel="noopener noreferrer">PR acme/widgets#42 open</a></li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-info">assigned to you 6d ago</li>
+</ul>
+<h3>Assignees</h3>
+<ul><li>me</li></ul>
+<h3>Labels</h3>
+<p class="labels"><span class="tag">bug</span></p>
+<h3>Linked PRs</h3>
+<ul><li><a href="https://github.com/acme/widgets/pull/42" target="_blank" rel="noopener noreferrer">acme/widgets#42</a> Fix reconcile loop when the gateway disappears <span class="muted">open</span></li></ul>
+</div>
+</details>
+</section>
+<section>
+<h2>Mentioned <span class="count">1</span></h2>
+<details class="issue" data-id="I_3">
+<summary>
+<span class="fix fix-merged" title="linked PR merged" aria-label="linked PR merged"></span>
+<span class="age">1d</span>
+<a class="ref" href="https://github.com/acme/docs/issues/90" target="_blank" rel="noopener noreferrer">acme/docs#90</a>
+<span class="title">Broken link on the install page</span>
+<span class="author">erin</span>
+<span class="tags"><span class="tag">mentioned</span><span class="tag">commented</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by erin · opened 4d ago · touched 1d ago</p>
+<h3>What's left</h3>
+<ul class="lines">
+<li class="line-good"><a href="https://github.com/acme/docs/pull/91" target="_blank" rel="noopener noreferrer">PR acme/docs#91 merged</a></li>
+</ul>
+<h3>You</h3>
+<ul class="lines">
+<li class="line-wait">mentioned by erin 1d ago</li>
+<li class="line-wait">1 reply since yours</li>
+</ul>
+<h3>Assignees</h3>
+<ul><li>erin</li></ul>
+<h3>Linked PRs</h3>
+<ul><li><a href="https://github.com/acme/docs/pull/91" target="_blank" rel="noopener noreferrer">acme/docs#91</a> Fix the install link <span class="muted">merged</span></li></ul>
+</div>
+</details>
+</section>
+</div>
 </div>

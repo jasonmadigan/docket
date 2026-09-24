@@ -81,10 +81,10 @@ func TestSectionsGolden(t *testing.T) {
 func TestPageWrapsSections(t *testing.T) {
 	body := get(t, handler(t, newFake(fixture.State())), "localhost:7788", "/").Body.String()
 	for _, want := range []string{
-		"<title>docket (5)</title>",
+		"<title>docket (8)</title>",
 		`<link rel="stylesheet" href="/static/style.css">`,
 		`<script src="/static/app.js" defer></script>`,
-		`<main id="sections"><div class="docket" data-title="docket (5)">`,
+		`<main id="sections"><div class="docket" data-title="docket (8)">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %q", want)
@@ -155,7 +155,7 @@ func TestLoadingAndEmpty(t *testing.T) {
 		t.Fatalf("loading page:\n%s", body)
 	}
 	body = get(t, handler(t, newFake(engine.State{Loaded: true, Updated: fixture.Now})), "localhost", "/sections").Body.String()
-	if !strings.Contains(body, "Nothing open involves you.") {
+	if !strings.Contains(body, "No open PRs involve you.") {
 		t.Fatalf("empty page:\n%s", body)
 	}
 }
@@ -249,15 +249,17 @@ func TestOnlyWebLinksAreRendered(t *testing.T) {
 	prs[0].Checks.Failing[0].URL = "mailto:someone@example.com"
 	prs[0].Issues[0].URL = "/relative"
 	prs[1].URL = "ftp://example.com/pr"
+	issues := fixture.Issues()
+	issues[0].PRs[0].URL = "javascript:alert(1)"
 	st := fixture.State()
-	st.Snapshot = model.Build(prs, nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	st.Snapshot = model.Build(prs, issues, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
 	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
-	for _, bad := range []string{`href="mailto:`, `href="/relative"`, `href="ftp:`, `href=""`} {
+	for _, bad := range []string{`href="mailto:`, `href="/relative"`, `href="ftp:`, `href="javascript:`, `href=""`} {
 		if strings.Contains(body, bad) {
 			t.Errorf("rendered %s", bad)
 		}
 	}
-	for _, text := range []string{"acme/widgets#7", "acme/widgets#51", "CI failing: e2e"} {
+	for _, text := range []string{"acme/widgets#7", "acme/widgets#51", "CI failing: e2e", "<li>acme/widgets#42 Fix reconcile loop"} {
 		if !strings.Contains(body, text) {
 			t.Errorf("lost the text %q along with its link", text)
 		}
@@ -267,9 +269,12 @@ func TestOnlyWebLinksAreRendered(t *testing.T) {
 func TestHeaderShowsCountsAndProgress(t *testing.T) {
 	body := get(t, handler(t, newFake(fixture.State())), "localhost", "/sections").Body.String()
 	for _, want := range []string{
-		`<p class="who"><b>me</b> · 5 open</p>`,
+		`<p class="who"><b>me</b></p>`,
+		`<a href="#prs" data-tab="prs" aria-current="page">Pull requests <b>5</b></a>`,
+		`<a href="#issues" data-tab="issues">Issues <b>3</b></a>`,
 		`<span class="pill">Mine <b>2</b></span>`,
 		`<span class="pill">Requested <b>2</b></span>`,
+		`<span class="pill">Assigned <b>1</b></span>`,
 		`<p class="activity">updated 12:00 · next 12:01 · budget 4812/5000</p>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -291,5 +296,26 @@ func TestChangedRowsAreMarked(t *testing.T) {
 	body := get(t, handler(t, newFake(st)), "localhost", "/sections").Body.String()
 	if !strings.Contains(body, `<details class="pr changed" data-id="PR_3">`) || strings.Count(body, "pr changed") != 1 {
 		t.Fatalf("page:\n%s", body)
+	}
+}
+
+func TestIssuesRenderInTheirOwnTab(t *testing.T) {
+	body := get(t, handler(t, newFake(fixture.State())), "localhost", "/sections").Body.String()
+	for _, want := range []string{
+		`<div class="list" data-tab="prs">`,
+		`<div class="list" data-tab="issues" hidden>`,
+		`<details class="issue" data-id="I_1">`,
+		`<span class="fix fix-open" title="linked PR open" aria-label="linked PR open"></span>`,
+		`<h3>Linked PRs</h3>`,
+		`>acme/widgets#42</a> Fix reconcile loop when the gateway disappears <span class="muted">open</span>`,
+		`<h3>Assignees</h3>`,
+		`<p class="labels"><span class="tag">bug</span></p>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+	if strings.Count(body, `<details class="pr`) != 5 || strings.Count(body, `<details class="issue`) != 3 {
+		t.Fatalf("rows by kind wrong:\n%s", body)
 	}
 }

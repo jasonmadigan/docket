@@ -225,12 +225,12 @@ Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Ov
 - Listens on `127.0.0.1:7788`. Any other address needs an explicit `--addr` and prints a warning: there's no auth, and private repo titles are on the page.
 - Rejects requests whose `Host` is a name other than `localhost`, which blocks DNS rebinding; IP literals pass, so an explicit `--addr` still works from the LAN.
 - `Content-Security-Policy: default-src 'self'`; styles and script are separate embedded files.
-- Server-rendered sections. Rows link to the PR, failing checks and linked issues, for http and https links only.
+- Server-rendered lists, one per tab: Pull requests and Issues. A tab bar switches between them and the URL fragment (`#issues`) keeps the choice across reloads and refreshes. Rows link to the PR or issue, failing checks, linked issues and linked PRs, for http and https links only.
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
-- Header: login, open count, a pill per section, and a spinner with the poll's step while one runs; each step arrives over the event stream.
+- Header: login, the tab bar with a count per tab, a pill per section of the tab showing, and a spinner with the poll's step while one runs; each step arrives over the event stream.
 - Rows that changed in the latest poll flash and fade.
 - Settings in a dialog, outside the swapped region so a refresh never closes it. `POST /settings` takes JSON only and refuses requests a browser marks cross-site or from another origin, so no other page can change them.
-- Tab title carries the count: `docket (23)`.
+- Tab title carries the count of PRs and issues: `docket (124)`.
 - Light and dark via `prefers-color-scheme`.
 - `--open` launches the browser. On another host, `ssh -L 7788:127.0.0.1:7788` reaches it.
 
