@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,13 +23,19 @@ type outcome struct {
 // gated hands out one fetch result per give, so each poll is observed.
 type gated struct {
 	results chan outcome
+
+	mu       sync.Mutex
+	archived [][]string
 }
 
 func (g *gated) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	return fetch.Viewer{Login: "me"}, fetch.Meta{}, nil
 }
 
-func (g *gated) Fetch(ctx context.Context, _ string, _ []string, progress func(fetch.Progress)) (fetch.Result, error) {
+func (g *gated) Fetch(ctx context.Context, _ string, archived []string, progress func(fetch.Progress)) (fetch.Result, error) {
+	g.mu.Lock()
+	g.archived = append(g.archived, archived)
+	g.mu.Unlock()
 	progress(fetch.Progress{Phase: "details", Done: 1, Total: 2})
 	select {
 	case o := <-g.results:
@@ -107,7 +114,7 @@ func (r running) next(t *testing.T, want func(State) bool) State {
 }
 
 func loaded(s State) bool { return s.Loaded && s.Err == nil }
-func erred(s State) bool  { return s.Err != nil }
+func erred(s State) bool  { return s.Err != nil && !s.Busy }
 
 func TestRunPublishesSnapshots(t *testing.T) {
 	r := start(t, Config{Poll: time.Hour})
@@ -219,14 +226,18 @@ func TestLowBudgetWaitsForReset(t *testing.T) {
 	}
 }
 
-type static struct{ viewers int }
+type static struct {
+	viewers  int
+	archived []string
+}
 
 func (s *static) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	s.viewers++
 	return fetch.Viewer{Login: "me"}, fetch.Meta{Warnings: []string{"teams hidden"}}, nil
 }
 
-func (s *static) Fetch(context.Context, string, []string, func(fetch.Progress)) (fetch.Result, error) {
+func (s *static) Fetch(_ context.Context, _ string, archived []string, _ func(fetch.Progress)) (fetch.Result, error) {
+	s.archived = archived
 	return fetch.Result{PRs: []model.PR{mine("a")}, Meta: fetch.Meta{Warnings: []string{"saml"}}}, nil
 }
 
@@ -324,5 +335,82 @@ func TestConfigureAppliesAtOnce(t *testing.T) {
 	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Next.Equal(now.Add(2*time.Minute)) })
 	if got := s.Snapshot.PRs.Sections[0].Rows[0].Activity; !got.Equal(now.Add(-time.Hour)) {
 		t.Fatalf("ignored account still counted: activity %v", got)
+	}
+}
+
+func TestArchiveAppliesWithoutPolling(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	r.src.give(t, ok(mine("a"), mine("b")))
+	r.next(t, loaded)
+	r.SetArchive(map[string]time.Time{"a": now})
+	s := r.next(t, func(s State) bool { return s.Snapshot.Archived.Count == 1 })
+	if s.Snapshot.PRs.Count != 1 || s.Changed != nil || s.Busy {
+		t.Fatalf("state = %+v", s)
+	}
+	if _, ok := s.Snapshot.Archived.Find("a"); !ok {
+		t.Fatalf("archived = %+v", s.Snapshot.Archived)
+	}
+	r.src.refusedFor(t, 100*time.Millisecond)
+}
+
+func TestArchiveMadeMidPollSurvivesIt(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	r.src.give(t, ok(mine("a"), mine("b")))
+	r.next(t, loaded)
+	r.Refresh()
+	r.next(t, func(s State) bool { return s.Busy && s.Progress.Phase == "details" })
+	r.SetArchive(map[string]time.Time{"a": now})
+	if s := r.next(t, func(s State) bool { return s.Snapshot.Archived.Count == 1 }); !s.Busy {
+		t.Fatalf("the rebuild lost the poll's progress: %+v", s)
+	}
+	r.src.give(t, ok(mine("a"), mine("b")))
+	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy })
+	if s.Snapshot.Archived.Count != 1 || s.Snapshot.PRs.Count != 1 {
+		t.Fatalf("the poll undid the archive: %+v", s.Snapshot)
+	}
+}
+
+func TestPollsTellFetchTheArchive(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	r.src.give(t, ok(mine("a")))
+	r.next(t, loaded)
+	r.SetArchive(map[string]time.Time{"b": now, "a": now})
+	r.Refresh()
+	r.src.give(t, ok(mine("a")))
+	r.src.mu.Lock()
+	defer r.src.mu.Unlock()
+	got := r.src.archived
+	if len(got) != 2 || len(got[0]) != 0 || !reflect.DeepEqual(got[1], []string{"a", "b"}) {
+		t.Fatalf("fetch was told %v", got)
+	}
+}
+
+func TestPrunableHasGoneAndReopened(t *testing.T) {
+	r := start(t, Config{Poll: time.Hour})
+	reopened := mine("a")
+	reopened.Timeline = []model.Event{{Kind: model.EventReopened, Actor: model.Actor{Login: "bob"}, At: now}}
+	r.SetArchive(map[string]time.Time{"a": now.Add(-time.Hour), "x": now.Add(-time.Hour)})
+	res := ok(reopened)
+	res.res.Gone = []string{"x"}
+	r.src.give(t, res)
+	s := r.next(t, loaded)
+	if _, ok := s.Snapshot.PRs.Find("a"); !ok {
+		t.Fatalf("reopened since it was archived, a belongs in its section: %+v", s.Snapshot)
+	}
+	if got := r.Prunable(); !reflect.DeepEqual(got, []string{"a", "x"}) {
+		t.Fatalf("prunable = %v", got)
+	}
+}
+
+func TestOnceSkipsTheLookup(t *testing.T) {
+	src := &static{}
+	e := New(src, Config{Now: func() time.Time { return now }})
+	e.SetArchive(map[string]time.Time{"a": now.Add(-time.Hour)})
+	st, err := e.Once(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src.archived != nil || st.Snapshot.Archived.Count != 1 {
+		t.Fatalf("told fetch %v; archived %d", src.archived, st.Snapshot.Archived.Count)
 	}
 }

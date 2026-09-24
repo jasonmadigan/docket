@@ -145,6 +145,8 @@ Any PR or issue can be archived. It leaves its section for the Archived list, `P
 
 Archived items are still fetched, so their rows stay whole and unarchiving shows one at once. Counts and titles leave them out.
 
+The engine keeps the last poll's result. An archive change rebuilds the snapshot from it at once, without polling or spending budget, and a poll under way publishes with the archive as it stands, so an archive made mid-poll holds.
+
 ## Architecture
 
 ```text

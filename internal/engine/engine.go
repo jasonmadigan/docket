@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ type State struct {
 	Busy     bool
 	Progress fetch.Progress
 	Changed  []string // prs new or different in the latest poll; none after the first
+	gen      int      // the archive change Snapshot was built with
 }
 
 type Engine struct {
@@ -47,6 +49,15 @@ type Engine struct {
 	mu    sync.Mutex
 	state State
 	subs  map[chan State]struct{}
+
+	// the last good poll and who it was for, so an archive change can
+	// rebuild the snapshot without polling
+	last    fetch.Result
+	lastFor fetch.Viewer
+	archive map[string]time.Time
+	gen     int // counts archive changes
+	gone    []string
+	void    []string
 
 	// owned by the polling goroutine
 	viewer         fetch.Viewer
@@ -125,10 +136,51 @@ func (e *Engine) Refresh() {
 
 func (e *Engine) Once(ctx context.Context) (State, error) {
 	var st State
-	if err := e.poll(ctx, e.cfg.Now(), &st); err != nil {
+	if err := e.poll(ctx, e.cfg.Now(), &st, nil); err != nil {
 		return State{}, err
 	}
 	return st, nil
+}
+
+// SetArchive swaps in the archive and, once a poll has landed, rebuilds
+// the snapshot from it at once, without polling.
+func (e *Engine) SetArchive(at map[string]time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.archive = maps.Clone(at)
+	e.gen++
+	if e.state.Loaded {
+		st := e.state
+		st.Changed = nil
+		e.send(st)
+	}
+}
+
+// Prunable lists archived ids whose archive has ended: closed, merged or
+// gone from github, or reopened since. The archive drops them when next
+// written.
+func (e *Engine) Prunable() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := slices.Concat(e.gone, e.void)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+func (e *Engine) archivedIDs() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return slices.Sorted(maps.Keys(e.archive))
+}
+
+// build files the last poll's items with the archive as it stands; the
+// caller holds mu.
+func (e *Engine) build(now time.Time) model.Snapshot {
+	snap := model.Build(e.last.PRs, e.last.Issues, model.Params{
+		Login: e.lastFor.Login, Teams: e.lastFor.Teams, Ignore: e.cfg.Ignore, Archive: e.archive, Now: now,
+	})
+	e.void = snap.Void
+	return snap
 }
 
 // Run polls until ctx ends. It returns early only when the token is
@@ -158,7 +210,7 @@ func (e *Engine) Run(ctx context.Context) error {
 func (e *Engine) tick(ctx context.Context) (time.Time, error) {
 	now := e.cfg.Now()
 	st := e.Current()
-	err := e.poll(ctx, now, &st)
+	err := e.poll(ctx, now, &st, e.archivedIDs())
 	switch {
 	case ctx.Err() != nil:
 		return now, nil
@@ -178,7 +230,7 @@ func (e *Engine) tick(ctx context.Context) (time.Time, error) {
 	return st.Next, nil
 }
 
-func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
+func (e *Engine) poll(ctx context.Context, now time.Time, st *State, lookup []string) error {
 	ctx, cancel := context.WithTimeout(ctx, e.cfg.Timeout)
 	defer cancel()
 	busy := func(p fetch.Progress) {
@@ -195,15 +247,15 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 		e.viewer, e.viewerAt, e.viewerWarnings = v, now, meta.Warnings
 		keepBudget(st, meta.Budget)
 	}
-	res, err := e.src.Fetch(ctx, e.viewer.Login, nil, busy)
+	res, err := e.src.Fetch(ctx, e.viewer.Login, lookup, busy)
 	if err != nil {
 		return err
 	}
 	keepBudget(st, res.Budget)
-	_, ignore := e.settings()
-	st.Snapshot = model.Build(res.PRs, res.Issues, model.Params{
-		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: ignore, Now: now,
-	})
+	e.mu.Lock()
+	e.last, e.lastFor, e.gone = res, e.viewer, res.Gone
+	st.Snapshot, st.gen = e.build(now), e.gen
+	e.mu.Unlock()
 	st.Changed = e.changed(st.Snapshot)
 	st.Loaded = true
 	st.Updated = now
@@ -249,6 +301,16 @@ func (e *Engine) retry(now time.Time, err error, b gh.Budget) time.Time {
 func (e *Engine) publish(st State) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.send(st)
+}
+
+// send makes st current and hands it to subscribers; the caller holds mu.
+// A snapshot built before the latest archive change is rebuilt first, so
+// an archive made mid-poll is never undone.
+func (e *Engine) send(st State) {
+	if st.Loaded && st.gen != e.gen {
+		st.Snapshot, st.gen = e.build(st.Snapshot.At), e.gen
+	}
 	e.state = st
 	for ch := range e.subs {
 		select {
@@ -264,7 +326,7 @@ func (e *Engine) publish(st State) {
 func (e *Engine) changed(s model.Snapshot) []string {
 	prints := map[string]string{}
 	var out []string
-	for _, l := range []model.List{s.PRs, s.Issues} {
+	for _, l := range []model.List{s.PRs, s.Issues, s.Archived} {
 		for _, sec := range l.Sections {
 			for _, r := range sec.Rows {
 				id, fp := r.Item().ID, r.Fingerprint()
