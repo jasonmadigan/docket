@@ -65,7 +65,7 @@ func (m Model) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "docket"
 	if m.state.Loaded {
-		v.WindowTitle = fmt.Sprintf("docket (%d)", m.state.Snapshot.Count)
+		v.WindowTitle = fmt.Sprintf("docket (%d)", m.state.Snapshot.PRs.Count)
 	}
 	return v
 }
@@ -136,12 +136,12 @@ func (m Model) header() string {
 	brand := m.st.badge.Render(" docket ")
 	var who, counts string
 	if s.Loaded {
-		who = plain.Render(fmt.Sprintf(" %d open", s.Snapshot.Count))
+		who = plain.Render(fmt.Sprintf(" %d open", s.Snapshot.PRs.Count))
 		if login := s.Snapshot.Login; login != "" {
 			who = plain.Render(" ") + bar(m.st.bold).Render(login) + plain.Render(" ·") + who
 		}
 		var parts []string
-		for _, sec := range s.Snapshot.Sections {
+		for _, sec := range s.Snapshot.PRs.Sections {
 			parts = append(parts, bar(m.st.faint).Render(sec.Name+" ")+bar(m.st.bold).Render(fmt.Sprint(len(sec.Rows))))
 		}
 		counts = plain.Render("   ") + strings.Join(parts, plain.Render("  "))

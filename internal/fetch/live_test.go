@@ -50,7 +50,7 @@ func TestLive(t *testing.T) {
 		}
 	}
 	var out bytes.Buffer
-	snap := model.Build(res.PRs, model.Params{Login: v.Login, Teams: v.Teams, Now: time.Now()})
+	snap := model.Build(res.PRs, nil, model.Params{Login: v.Login, Teams: v.Teams, Now: time.Now()})
 	if err := dump.Text(&out, snap); err != nil {
 		t.Fatal(err)
 	}

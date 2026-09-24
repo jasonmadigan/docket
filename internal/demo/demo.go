@@ -179,7 +179,7 @@ func PRs() []model.PR {
 // State is a loaded engine state over PRs, with two of them just changed.
 func State() engine.State {
 	return engine.State{
-		Snapshot: model.Build(PRs(), model.Params{Login: me, Teams: []string{"acme/maintainers"}, Now: Now}),
+		Snapshot: model.Build(PRs(), nil, model.Params{Login: me, Teams: []string{"acme/maintainers"}, Now: Now}),
 		Loaded:   true,
 		Updated:  Now,
 		Next:     Now.Add(time.Minute),

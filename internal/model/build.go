@@ -20,16 +20,21 @@ const (
 
 type Row struct {
 	PR       *PR       `json:"pr,omitempty"`
+	Issue    *Issue    `json:"issue,omitempty"`
 	Teams    []string  `json:"teams,omitempty"` // my teams asked to review
 	Activity time.Time `json:"activity"`        // zero when no person has touched it
-	CI       CI        `json:"ci"`
+	CI       CI        `json:"ci,omitempty"`    // prs
+	Fix      Fix       `json:"fix,omitempty"`   // issues
 	Review   string    `json:"review,omitempty"`
 	Left     []Line    `json:"left"`
 	Mine     []Line    `json:"mine,omitempty"`
 }
 
-// Item is what the row's pull request shares with issues.
+// Item is what the row's pull request or issue shares with the other kind.
 func (r Row) Item() Item {
+	if r.Issue != nil {
+		return r.Issue.Item
+	}
 	return r.PR.Item
 }
 
@@ -38,11 +43,17 @@ type Section struct {
 	Rows []Row  `json:"rows"`
 }
 
-type Snapshot struct {
-	Login    string    `json:"login"`
-	At       time.Time `json:"at"`
+// List is one tab's sections.
+type List struct {
 	Count    int       `json:"count"`
 	Sections []Section `json:"sections"`
+}
+
+type Snapshot struct {
+	Login  string    `json:"login"`
+	At     time.Time `json:"at"`
+	PRs    List      `json:"prs"`
+	Issues List      `json:"issues"`
 }
 
 type Params struct {
@@ -52,31 +63,36 @@ type Params struct {
 	Now    time.Time
 }
 
-var sections = []struct {
+type group struct {
 	name string
 	tags []Tag
-}{
+}
+
+var prGroups = []group{
 	{"Mine", []Tag{TagAuthor}},
 	{"Requested", []Tag{TagReview, TagTeam, TagAssigned}},
 	{"Mentioned", []Tag{TagMentioned}},
 	{"Participating", []Tag{TagReviewed, TagCommented}},
 }
 
-// Build files each pr under its first matching section, longest neglected
-// first.
-func Build(prs []PR, p Params) Snapshot {
+var issueGroups = []group{
+	{"Mine", []Tag{TagAuthor}},
+	{"Assigned", []Tag{TagAssigned}},
+	{"Mentioned", []Tag{TagMentioned}},
+	{"Participating", []Tag{TagCommented}},
+}
+
+// Build files each pr and issue under its first matching section, longest
+// neglected first.
+func Build(prs []PR, issues []Issue, p Params) Snapshot {
 	people := newPeople(p.Login, p.Ignore)
 	teams := map[string]bool{}
 	for _, t := range p.Teams {
 		teams[strings.ToLower(t)] = true
 	}
-	grouped := make([][]Row, len(sections))
+	var prRows, issueRows []Row
 	for _, pr := range prs {
-		i := sectionOf(pr.Tags)
-		if i < 0 {
-			continue
-		}
-		grouped[i] = append(grouped[i], Row{
+		prRows = append(prRows, Row{
 			PR:       &pr,
 			Teams:    myTeams(pr, teams),
 			Activity: lastHumanActivity(pr, people),
@@ -86,21 +102,42 @@ func Build(prs []PR, p Params) Snapshot {
 			Mine:     mySide(pr, people, teams, p.Now),
 		})
 	}
-	snap := Snapshot{Login: p.Login, At: p.Now}
-	for i, rows := range grouped {
-		if len(rows) == 0 {
-			continue
-		}
-		slices.SortStableFunc(rows, byActivity)
-		snap.Sections = append(snap.Sections, Section{Name: sections[i].name, Rows: rows})
-		snap.Count += len(rows)
+	for _, is := range issues {
+		issueRows = append(issueRows, Row{
+			Issue:    &is,
+			Activity: issueActivity(is, people),
+			Fix:      fixOf(is.PRs),
+			Left:     issueLeft(is),
+			Mine:     issueMine(is, people, p.Now),
+		})
 	}
-	return snap
+	return Snapshot{Login: p.Login, At: p.Now, PRs: file(prRows, prGroups), Issues: file(issueRows, issueGroups)}
 }
 
-func sectionOf(tags []Tag) int {
-	for i, s := range sections {
-		for _, t := range s.tags {
+// file puts each row under the first group its tags match, longest
+// neglected first. Rows matching none are dropped; empty groups are hidden.
+func file(rows []Row, groups []group) List {
+	grouped := make([][]Row, len(groups))
+	for _, r := range rows {
+		if i := groupOf(r.Item().Tags, groups); i >= 0 {
+			grouped[i] = append(grouped[i], r)
+		}
+	}
+	var l List
+	for i, rs := range grouped {
+		if len(rs) == 0 {
+			continue
+		}
+		slices.SortStableFunc(rs, byActivity)
+		l.Sections = append(l.Sections, Section{Name: groups[i].name, Rows: rs})
+		l.Count += len(rs)
+	}
+	return l
+}
+
+func groupOf(tags []Tag, groups []group) int {
+	for i, g := range groups {
+		for _, t := range g.tags {
 			if slices.Contains(tags, t) {
 				return i
 			}
@@ -110,10 +147,11 @@ func sectionOf(tags []Tag) int {
 }
 
 func byActivity(a, b Row) int {
+	x, y := a.Item(), b.Item()
 	return cmp.Or(
 		a.Activity.Compare(b.Activity),
-		strings.Compare(a.PR.Repo, b.PR.Repo),
-		cmp.Compare(a.PR.Number, b.PR.Number),
+		strings.Compare(x.Repo, y.Repo),
+		cmp.Compare(x.Number, y.Number),
 	)
 }
 
@@ -195,13 +233,19 @@ var agoSuffix = regexp.MustCompile(` \d+(s|m|h|d|w|mo|y) ago$`)
 // Fingerprint changes when anything shown for the row does, but not when
 // time alone moves an age on.
 func (r Row) Fingerprint() string {
-	parts := []string{r.Item().Title, string(r.CI), r.Review, r.Activity.UTC().Format(time.RFC3339Nano)}
+	parts := []string{r.Item().Title, string(r.CI), string(r.Fix), r.Review, r.Activity.UTC().Format(time.RFC3339Nano)}
 	for _, l := range slices.Concat(r.Left, r.Mine) {
 		parts = append(parts, agoSuffix.ReplaceAllString(l.Text, ""))
 	}
 	if r.PR != nil {
 		for _, is := range r.PR.Issues {
 			parts = append(parts, fmt.Sprintf("%s#%d %s", is.Repo, is.Number, is.State))
+		}
+	}
+	if r.Issue != nil {
+		parts = append(parts, strings.Join(r.Issue.Labels, ","))
+		for _, a := range r.Issue.Assignees {
+			parts = append(parts, a.Login)
 		}
 	}
 	return strings.Join(parts, "\x1f")

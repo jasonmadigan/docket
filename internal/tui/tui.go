@@ -302,7 +302,7 @@ func (m Model) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) rebuild() {
 	query := strings.ToLower(strings.TrimSpace(m.filter.Value()))
 	present := map[string]bool{}
-	for _, sec := range m.state.Snapshot.Sections {
+	for _, sec := range m.state.Snapshot.PRs.Sections {
 		for _, r := range sec.Rows {
 			present[r.PR.ID] = true
 		}
@@ -313,7 +313,7 @@ func (m *Model) rebuild() {
 		}
 	}
 	m.groups, m.rows = nil, nil
-	for _, sec := range m.state.Snapshot.Sections {
+	for _, sec := range m.state.Snapshot.PRs.Sections {
 		g := model.Section{Name: sec.Name}
 		for _, r := range sec.Rows {
 			if query == "" || strings.Contains(haystack(r), query) {

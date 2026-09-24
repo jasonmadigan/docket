@@ -179,6 +179,8 @@ Every query selects `rateLimit { cost remaining limit resetAt }`, and both views
 
 Flags: `--poll` everywhere, `--addr` and `--open` on `web`, `--json` on `dump`.
 
+`dump --json` prints the snapshot: `login` and `at`, then `prs` and `issues`, each a `count` and its `sections`, whose rows hold a `pr` or an `issue`.
+
 
 ### TUI
 

@@ -68,10 +68,10 @@ func view(st engine.State, loc *time.Location) pageView {
 	snap := st.Snapshot
 	v := pageView{Title: "docket", Loaded: st.Loaded, Login: snap.Login, Warnings: st.Warnings}
 	if st.Loaded {
-		v.Title = fmt.Sprintf("docket (%d)", snap.Count)
-		v.Count = snap.Count
+		v.Title = fmt.Sprintf("docket (%d)", snap.PRs.Count)
+		v.Count = snap.PRs.Count
 		v.Updated = st.Updated.In(loc).Format("15:04")
-		for _, sec := range snap.Sections {
+		for _, sec := range snap.PRs.Sections {
 			v.Counts = append(v.Counts, count{Name: sec.Name, N: len(sec.Rows)})
 		}
 	}
@@ -91,7 +91,7 @@ func view(st engine.State, loc *time.Location) pageView {
 	for _, id := range st.Changed {
 		changed[id] = true
 	}
-	for _, sec := range snap.Sections {
+	for _, sec := range snap.PRs.Sections {
 		sv := sectionView{Name: sec.Name}
 		for _, r := range sec.Rows {
 			row := rowOf(r, snap)

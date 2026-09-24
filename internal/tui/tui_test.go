@@ -163,7 +163,7 @@ func TestWideCharactersKeepColumns(t *testing.T) {
 	prs := fixture.PRs()
 	prs[1].Title = "修复网关的重连逻辑 🚀 and enough trailing words to overflow any column"
 	st := fixture.State()
-	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	st.Snapshot = model.Build(prs, nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
 	for _, w := range []int{140, 90, 44} {
 		hs := newHarness(t, st, w, 20)
 		checkSize(t, hs.screen(), w, 20)
@@ -255,12 +255,12 @@ func TestSelectionSurvivesRefresh(t *testing.T) {
 	prs := fixture.PRs()
 	st := fixture.State()
 	params := model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now}
-	st.Snapshot = model.Build(prs[2:], params)
+	st.Snapshot = model.Build(prs[2:], nil, params)
 	hs.send(stateMsg(st))
 	if hs.selected() != "acme/gateway#1203" {
 		t.Fatalf("selection moved to %q", hs.selected())
 	}
-	st.Snapshot = model.Build(prs[3:], params)
+	st.Snapshot = model.Build(prs[3:], nil, params)
 	hs.send(stateMsg(st))
 	if hs.selected() != "acme/docs#88" {
 		t.Fatalf("after the selected PR closed, selected %q", hs.selected())
@@ -287,7 +287,7 @@ func TestUnsafeLinksAreNotHyperlinked(t *testing.T) {
 	prs := fixture.PRs()
 	prs[0].Checks.Failing[0].URL = "file:///Applications/Calculator.app"
 	st := fixture.State()
-	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	st.Snapshot = model.Build(prs, nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
 	hs := newHarness(t, st, 140, 30)
 	hs.press("j")
 	if strings.Contains(hs.m.View().Content, "file:///") {
@@ -375,7 +375,7 @@ func TestEmojiRowsMatchTheRenderer(t *testing.T) {
 	prs[0].Title = "⚠️ fix the warning banner"
 	prs[1].Title = "\U0001f469‍\U0001f4bb pairing notes"
 	st := fixture.State()
-	st.Snapshot = model.Build(prs, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
+	st.Snapshot = model.Build(prs, nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: fixture.Now})
 	exact := func(t *testing.T, screen string, width func(string) int, w int) {
 		t.Helper()
 		lines := strings.Split(screen, "\n")

@@ -113,7 +113,7 @@ func TestRunPublishesSnapshots(t *testing.T) {
 	r := start(t, Config{Poll: time.Hour})
 	r.src.give(t, ok(mine("a")))
 	s := r.next(t, loaded)
-	if s.Snapshot.Count != 1 || !s.Updated.Equal(now) || !s.Next.Equal(now.Add(time.Hour)) {
+	if s.Snapshot.PRs.Count != 1 || !s.Updated.Equal(now) || !s.Next.Equal(now.Add(time.Hour)) {
 		t.Fatalf("state = %+v", s)
 	}
 	if s.Budget.Remaining != 4000 || !reflect.DeepEqual(r.Current(), s) {
@@ -138,7 +138,7 @@ func TestFailureKeepsSnapshotAndBacksOff(t *testing.T) {
 	r.next(t, loaded)
 	r.src.give(t, failed(errors.New("boom")))
 	s := r.next(t, erred)
-	if s.Snapshot.Count != 1 || !s.Next.Equal(now.Add(time.Millisecond)) {
+	if s.Snapshot.PRs.Count != 1 || !s.Next.Equal(now.Add(time.Millisecond)) {
 		t.Fatalf("first failure = %+v", s)
 	}
 	r.src.give(t, failed(errors.New("boom")))
@@ -150,7 +150,7 @@ func TestFailureKeepsSnapshotAndBacksOff(t *testing.T) {
 		t.Fatalf("backoff should stay at its last step: %+v", s)
 	}
 	r.src.give(t, ok(mine("a"), mine("b")))
-	if s := r.next(t, loaded); s.Snapshot.Count != 2 {
+	if s := r.next(t, loaded); s.Snapshot.PRs.Count != 2 {
 		t.Fatalf("recovered = %+v", s)
 	}
 }
@@ -177,7 +177,7 @@ func TestRefreshPollsNow(t *testing.T) {
 	r.next(t, loaded)
 	r.Refresh()
 	r.src.give(t, ok(mine("a"), mine("b")))
-	if s := r.next(t, func(s State) bool { return s.Snapshot.Count == 2 }); s.Err != nil {
+	if s := r.next(t, func(s State) bool { return s.Snapshot.PRs.Count == 2 }); s.Err != nil {
 		t.Fatalf("state = %+v", s)
 	}
 }
@@ -247,7 +247,7 @@ func TestOnceRefreshesViewerHourly(t *testing.T) {
 		if src.viewers != step.viewers {
 			t.Fatalf("after %v: %d viewer fetches, want %d", clock.Sub(now), src.viewers, step.viewers)
 		}
-		if !reflect.DeepEqual(st.Warnings, []string{"teams hidden", "saml"}) || st.Snapshot.Count != 1 {
+		if !reflect.DeepEqual(st.Warnings, []string{"teams hidden", "saml"}) || st.Snapshot.PRs.Count != 1 {
 			t.Fatalf("state = %+v", st)
 		}
 	}
@@ -299,14 +299,14 @@ func TestChangedMarksNewAndDifferentPRs(t *testing.T) {
 	b.Checks = model.Checks{State: "FAILURE"}
 	r.Refresh()
 	r.src.give(t, ok(mine("a"), b, mine("c")))
-	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Snapshot.Count == 3 })
+	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Snapshot.PRs.Count == 3 })
 	if !reflect.DeepEqual(s.Changed, []string{"b", "c"}) {
 		t.Fatalf("changed = %v, want [b c]", s.Changed)
 	}
 	r.Refresh()
 	r.src.give(t, ok(mine("a"), b, mine("c")))
 	s = r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Updated.Equal(now) && len(s.Changed) == 0 })
-	if s.Snapshot.Count != 3 {
+	if s.Snapshot.PRs.Count != 3 {
 		t.Fatalf("state = %+v", s)
 	}
 }
@@ -316,13 +316,13 @@ func TestConfigureAppliesAtOnce(t *testing.T) {
 	bot := mine("a")
 	bot.Timeline = []model.Event{{Kind: model.EventComment, Actor: model.Actor{Login: "ci-robot"}, At: now}}
 	r.src.give(t, ok(bot))
-	if s := r.next(t, loaded); !s.Snapshot.Sections[0].Rows[0].Activity.Equal(now) {
-		t.Fatalf("activity = %v", s.Snapshot.Sections[0].Rows[0].Activity)
+	if s := r.next(t, loaded); !s.Snapshot.PRs.Sections[0].Rows[0].Activity.Equal(now) {
+		t.Fatalf("activity = %v", s.Snapshot.PRs.Sections[0].Rows[0].Activity)
 	}
 	r.Configure(2*time.Minute, []string{"ci-robot"})
 	r.src.give(t, ok(bot))
 	s := r.next(t, func(s State) bool { return s.Loaded && !s.Busy && s.Next.Equal(now.Add(2*time.Minute)) })
-	if got := s.Snapshot.Sections[0].Rows[0].Activity; !got.Equal(now.Add(-time.Hour)) {
+	if got := s.Snapshot.PRs.Sections[0].Rows[0].Activity; !got.Equal(now.Add(-time.Hour)) {
 		t.Fatalf("ignored account still counted: activity %v", got)
 	}
 }

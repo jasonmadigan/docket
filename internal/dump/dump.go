@@ -37,7 +37,7 @@ func JSON(w io.Writer, s model.Snapshot) error {
 func Text(w io.Writer, s model.Snapshot) error {
 	var b strings.Builder
 	indent := strings.Repeat(" ", 16)
-	for i, sec := range s.Sections {
+	for i, sec := range s.PRs.Sections {
 		if i > 0 {
 			b.WriteString("\n")
 		}

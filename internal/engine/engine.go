@@ -201,7 +201,7 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 	}
 	keepBudget(st, res.Budget)
 	_, ignore := e.settings()
-	st.Snapshot = model.Build(res.PRs, model.Params{
+	st.Snapshot = model.Build(res.PRs, nil, model.Params{
 		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: ignore, Now: now,
 	})
 	st.Changed = e.changed(st.Snapshot)
@@ -259,17 +259,19 @@ func (e *Engine) publish(st State) {
 	}
 }
 
-// changed lists prs that are new or look different since the last poll.
+// changed lists items that are new or look different since the last poll.
 // The first poll is the baseline and reports none.
 func (e *Engine) changed(s model.Snapshot) []string {
 	prints := map[string]string{}
 	var out []string
-	for _, sec := range s.Sections {
-		for _, r := range sec.Rows {
-			fp := r.Fingerprint()
-			prints[r.PR.ID] = fp
-			if e.prints != nil && e.prints[r.PR.ID] != fp {
-				out = append(out, r.PR.ID)
+	for _, l := range []model.List{s.PRs, s.Issues} {
+		for _, sec := range l.Sections {
+			for _, r := range sec.Rows {
+				id, fp := r.Item().ID, r.Fingerprint()
+				prints[id] = fp
+				if e.prints != nil && e.prints[id] != fp {
+					out = append(out, id)
+				}
 			}
 		}
 	}

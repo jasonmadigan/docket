@@ -114,7 +114,7 @@ func PRs() []model.PR {
 
 func State() engine.State {
 	return engine.State{
-		Snapshot: model.Build(PRs(), model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: Now}),
+		Snapshot: model.Build(PRs(), nil, model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: Now}),
 		Loaded:   true,
 		Updated:  Now,
 		Next:     Now.Add(time.Minute),

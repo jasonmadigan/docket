@@ -48,7 +48,7 @@ func TestJSONRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &back); err != nil {
 		t.Fatal(err)
 	}
-	if back.Count != 5 || len(back.Sections) != 3 || back.Sections[1].Rows[0].PR.Ref() != "acme/gateway#1188" {
+	if back.PRs.Count != 5 || len(back.PRs.Sections) != 3 || back.PRs.Sections[1].Rows[0].PR.Ref() != "acme/gateway#1188" {
 		t.Fatalf("round trip = %+v", back)
 	}
 }
