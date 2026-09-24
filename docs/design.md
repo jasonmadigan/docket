@@ -237,7 +237,8 @@ Opening runs `open` (macOS) or `xdg-open`, and only for http and https links. Ov
 - Listens on `127.0.0.1:7788`. Any other address needs an explicit `--addr` and prints a warning: there's no auth, and private repo titles are on the page.
 - Rejects requests whose `Host` is a name other than `localhost`, which blocks DNS rebinding; IP literals pass, so an explicit `--addr` still works from the LAN.
 - `Content-Security-Policy: default-src 'self'`; styles and script are separate embedded files.
-- Server-rendered lists, one per tab: Pull requests and Issues. A tab bar switches between them and the URL fragment (`#issues`) keeps the choice across reloads and refreshes. Rows link to the PR or issue, failing checks, linked issues and linked PRs, for http and https links only.
+- Server-rendered lists, one per tab: Pull requests, Issues and Archived. A tab bar switches between them and the URL fragment (`#issues`) keeps the choice across reloads and refreshes. Rows link to the PR or issue, failing checks, linked issues and linked PRs, for http and https links only.
+- An Archive button in each row's detail, Unarchive on the Archived tab. `POST /archive` takes `{"id", "archived"}` as JSON only and refuses requests a browser marks cross-site or from another origin, as `/settings` does. It archives only what the page lists and unarchives only what the archive holds; the event stream then brings the new state. A failure shows for a few seconds at the foot of the page.
 - Live: `/events` (SSE) signals a new snapshot, and a few lines of inline JS fetch `/sections` and swap it in. Scroll position and expanded rows survive.
 - Header: login, the tab bar with a count per tab, a pill per section of the tab showing, and a spinner with the poll's step while one runs; each step arrives over the event stream.
 - Rows that changed in the latest poll flash and fade.

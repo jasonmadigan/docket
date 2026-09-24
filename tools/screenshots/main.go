@@ -82,7 +82,7 @@ func run(args []string) error {
 	case "web":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
-		return web.Run(ctx, still{st}, web.Options{Addr: "127.0.0.1:7799", Log: os.Stderr, Location: time.UTC, Settings: prefs})
+		return web.Run(ctx, still{st}, web.Options{Addr: "127.0.0.1:7799", Log: os.Stderr, Location: time.UTC, Settings: prefs, Archive: shelf{}})
 	}
 	return fmt.Errorf("unknown mode %q", args[0])
 }

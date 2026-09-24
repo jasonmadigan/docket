@@ -81,3 +81,29 @@ if (dialog) {
     status.textContent = body.error;
   });
 }
+
+const toast = document.getElementById("toast");
+
+document.addEventListener("click", async (e) => {
+  const button = e.target.closest("[data-archive]");
+  if (!button) return;
+  button.disabled = true;
+  const res = await fetch("/archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: button.dataset.archive,
+      archived: button.dataset.archived !== "true",
+    }),
+  }).catch(() => null);
+  if (res && res.ok) return; // the event stream brings the new state
+  button.disabled = false;
+  const body = res
+    ? await res.json().catch(() => ({ error: res.statusText }))
+    : { error: "docket isn't answering" };
+  toast.textContent = body.error;
+  toast.hidden = false;
+  setTimeout(() => {
+    toast.hidden = true;
+  }, 5000);
+});

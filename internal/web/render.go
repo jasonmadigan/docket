@@ -44,6 +44,8 @@ type rowView struct {
 	ID         string
 	Kind       string // pr or issue
 	Changed    bool
+	Archived   bool
+	CanArchive bool
 	URL        string
 	Ref        string
 	Title      string
@@ -81,7 +83,7 @@ var fixLabels = map[model.Fix]string{
 	model.FixNone:   "no linked PR",
 }
 
-func view(st engine.State, loc *time.Location) pageView {
+func view(st engine.State, loc *time.Location, canArchive bool) pageView {
 	snap := st.Snapshot
 	v := pageView{Title: "docket", Loaded: st.Loaded, Login: snap.Login, Warnings: st.Warnings}
 	if st.Loaded {
@@ -110,6 +112,7 @@ func view(st engine.State, loc *time.Location) pageView {
 	}{
 		{"prs", "Pull requests", "No open PRs involve you.", snap.PRs},
 		{"issues", "Issues", "No open issues involve you.", snap.Issues},
+		{"archived", "Archived", "Nothing archived.", snap.Archived},
 	} {
 		tv := tabView{Key: t.key, Name: t.name, Count: t.list.Count, Hidden: i > 0, Empty: t.empty}
 		for _, sec := range t.list.Sections {
@@ -117,6 +120,7 @@ func view(st engine.State, loc *time.Location) pageView {
 			for _, r := range sec.Rows {
 				row := rowOf(r, snap)
 				row.Changed = changed[row.ID]
+				row.CanArchive = canArchive
 				sv.Rows = append(sv.Rows, row)
 			}
 			tv.Sections = append(tv.Sections, sv)
@@ -139,16 +143,17 @@ func phase(name string, done, total int) string {
 func rowOf(r model.Row, snap model.Snapshot) rowView {
 	it := r.Item()
 	v := rowView{
-		ID:     it.ID,
-		URL:    webOnly(it.URL),
-		Ref:    it.Ref(),
-		Title:  it.Title,
-		Tags:   r.Labels(),
-		Review: r.Review,
-		Age:    snap.Since(r.Activity),
-		Meta:   snap.Meta(r),
-		Left:   webLines(r.Left),
-		Mine:   webLines(r.Mine),
+		ID:       it.ID,
+		URL:      webOnly(it.URL),
+		Ref:      it.Ref(),
+		Title:    it.Title,
+		Tags:     r.Labels(),
+		Review:   r.Review,
+		Age:      snap.Since(r.Activity),
+		Meta:     snap.Meta(r),
+		Left:     webLines(r.Left),
+		Mine:     webLines(r.Mine),
+		Archived: !r.Archived.IsZero(),
 	}
 	if !snap.IsMe(it.Author) {
 		v.Author = it.Author.Login

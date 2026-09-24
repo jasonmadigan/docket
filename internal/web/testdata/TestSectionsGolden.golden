@@ -2,8 +2,8 @@
 <header>
 <h1>docket</h1>
 <p class="who"><b>me</b></p>
-<nav class="tabs"><a href="#prs" data-tab="prs" aria-current="page">Pull requests <b>5</b></a><a href="#issues" data-tab="issues">Issues <b>3</b></a></nav>
-<p class="counts"><span data-tab="prs"><span class="pill">Mine <b>2</b></span><span class="pill">Requested <b>2</b></span><span class="pill">Mentioned <b>1</b></span></span><span data-tab="issues" hidden><span class="pill">Mine <b>1</b></span><span class="pill">Assigned <b>1</b></span><span class="pill">Mentioned <b>1</b></span></span></p>
+<nav class="tabs"><a href="#prs" data-tab="prs" aria-current="page">Pull requests <b>5</b></a><a href="#issues" data-tab="issues">Issues <b>3</b></a><a href="#archived" data-tab="archived">Archived <b>1</b></a></nav>
+<p class="counts"><span data-tab="prs"><span class="pill">Mine <b>2</b></span><span class="pill">Requested <b>2</b></span><span class="pill">Mentioned <b>1</b></span></span><span data-tab="issues" hidden><span class="pill">Mine <b>1</b></span><span class="pill">Assigned <b>1</b></span><span class="pill">Mentioned <b>1</b></span></span><span data-tab="archived" hidden><span class="pill">Issues <b>1</b></span></span></p>
 <p class="activity">updated 12:00 · next 12:01 · budget 4812/5000</p>
 </header>
 <div class="list" data-tab="prs">
@@ -222,6 +222,26 @@
 <ul><li>erin</li></ul>
 <h3>Linked PRs</h3>
 <ul><li><a href="https://github.com/acme/docs/pull/91" target="_blank" rel="noopener noreferrer">acme/docs#91</a> Fix the install link <span class="muted">merged</span></li></ul>
+</div>
+</details>
+</section>
+</div>
+<div class="list" data-tab="archived" hidden>
+<section>
+<h2>Issues <span class="count">1</span></h2>
+<details class="issue" data-id="I_4">
+<summary>
+<span class="fix fix-none" title="no linked PR" aria-label="no linked PR"></span>
+<span class="age">1y</span>
+<a class="ref" href="https://github.com/acme/widgets/issues/3" target="_blank" rel="noopener noreferrer">acme/widgets#3</a>
+<span class="title">Support arm64 builds</span>
+<span class="author">frank</span>
+<span class="tags"><span class="tag">commented</span></span>
+</summary>
+<div class="detail">
+<p class="meta">by frank · opened 1y ago · touched 1y ago · archived 2d ago</p>
+<h3>Assignees</h3>
+<ul><li>frank</li></ul>
 </div>
 </details>
 </section>

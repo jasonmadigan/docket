@@ -272,6 +272,7 @@ func TestHeaderShowsCountsAndProgress(t *testing.T) {
 		`<p class="who"><b>me</b></p>`,
 		`<a href="#prs" data-tab="prs" aria-current="page">Pull requests <b>5</b></a>`,
 		`<a href="#issues" data-tab="issues">Issues <b>3</b></a>`,
+		`<a href="#archived" data-tab="archived">Archived <b>1</b></a>`,
 		`<span class="pill">Mine <b>2</b></span>`,
 		`<span class="pill">Requested <b>2</b></span>`,
 		`<span class="pill">Assigned <b>1</b></span>`,
@@ -315,7 +316,7 @@ func TestIssuesRenderInTheirOwnTab(t *testing.T) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	if strings.Count(body, `<details class="pr`) != 5 || strings.Count(body, `<details class="issue`) != 3 {
+	if strings.Count(body, `<details class="pr`) != 5 || strings.Count(body, `<details class="issue`) != 4 {
 		t.Fatalf("rows by kind wrong:\n%s", body)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -16,9 +17,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jasonmadigan/docket/internal/archive"
 	"github.com/jasonmadigan/docket/internal/browser"
 	"github.com/jasonmadigan/docket/internal/config"
 	"github.com/jasonmadigan/docket/internal/engine"
+	"github.com/jasonmadigan/docket/internal/model"
 )
 
 //go:embed templates static
@@ -36,6 +39,12 @@ type Settings interface {
 	Path() string
 }
 
+// Archiver hides items locally; archive.Store in practice.
+type Archiver interface {
+	Archive(id, ref, title string) error
+	Unarchive(id string) error
+}
+
 type Options struct {
 	Addr      string
 	Open      bool
@@ -43,6 +52,7 @@ type Options struct {
 	Location  *time.Location
 	KeepAlive time.Duration // how often an idle event stream sends a comment
 	Settings  Settings      // nil hides the settings
+	Archive   Archiver      // nil hides archiving
 }
 
 type Server struct {
@@ -51,6 +61,7 @@ type Server struct {
 	loc       *time.Location
 	keepAlive time.Duration
 	settings  Settings
+	archive   Archiver
 }
 
 func New(eng Engine, opts Options) (*Server, error) {
@@ -64,7 +75,7 @@ func New(eng Engine, opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Server{eng: eng, tmpl: tmpl, loc: opts.Location, keepAlive: opts.KeepAlive, settings: opts.Settings}, nil
+	return &Server{eng: eng, tmpl: tmpl, loc: opts.Location, keepAlive: opts.KeepAlive, settings: opts.Settings, archive: opts.Archive}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -76,6 +87,9 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /settings", s.getSettings)
 		mux.HandleFunc("POST /settings", s.postSettings)
 	}
+	if s.archive != nil {
+		mux.HandleFunc("POST /archive", s.postArchive)
+	}
 	mux.Handle("GET /static/{file}", http.FileServerFS(files))
 	return guard(mux)
 }
@@ -83,7 +97,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) render(name string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		var buf bytes.Buffer
-		v := view(s.eng.Current(), s.loc)
+		v := view(s.eng.Current(), s.loc, s.archive != nil)
 		if s.settings != nil {
 			v.Settings, v.SettingsPath = true, s.settings.Path()
 		}
@@ -227,20 +241,28 @@ func (s *Server) getSettings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// postSettings takes json only, from this page only: a form posted by
-// another site can't set that content type, and browsers label cross-site
-// requests.
-func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
+// foreign refuses requests another site made, and any not in json: a form
+// posted from elsewhere can't set that content type, and browsers label
+// cross-site requests.
+func foreign(w http.ResponseWriter, r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cross-site request"})
-		return
+		return true
 	}
 	if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+r.Host {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "cross-origin request"})
-		return
+		return true
 	}
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
 		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "send json"})
+		return true
+	}
+	return false
+}
+
+// postSettings takes json from this page only.
+func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
+	if foreign(w, r) {
 		return
 	}
 	var in settingsJSON
@@ -260,6 +282,56 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+var errNotShown = errors.New("not in docket's lists")
+
+// postArchive archives or unarchives one item, taking json from this page
+// only.
+func (s *Server) postArchive(w http.ResponseWriter, r *http.Request) {
+	if foreign(w, r) {
+		return
+	}
+	var in struct {
+		ID       string `json:"id"`
+		Archived bool   `json:"archived"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil || in.ID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
+		return
+	}
+	var err error
+	if in.Archived {
+		err = s.archiveShown(in.ID)
+	} else {
+		err = s.archive.Unarchive(in.ID)
+	}
+	switch {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, errNotShown), errors.Is(err, archive.ErrNotArchived):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	default:
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+}
+
+// archiveShown archives an item the page lists; one archived already is
+// left as it is.
+func (s *Server) archiveShown(id string) error {
+	snap := s.eng.Current().Snapshot
+	if _, ok := snap.Archived.Find(id); ok {
+		return nil
+	}
+	for _, l := range []model.List{snap.PRs, snap.Issues} {
+		if row, ok := l.Find(id); ok {
+			it := row.Item()
+			return s.archive.Archive(it.ID, it.Ref(), it.Title)
+		}
+	}
+	return fmt.Errorf("%s: %w", id, errNotShown)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

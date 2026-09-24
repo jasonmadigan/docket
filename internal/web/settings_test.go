@@ -46,7 +46,11 @@ func withSettings(t *testing.T, s Settings) http.Handler {
 }
 
 func post(h http.Handler, body string, header map[string]string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(body))
+	return postJSON(h, "/settings", body, header)
+}
+
+func postJSON(h http.Handler, path, body string, header map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Host = "127.0.0.1:7788"
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range header {

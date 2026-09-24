@@ -93,6 +93,9 @@
 <h3>Linked PRs</h3>
 <ul>{{range .}}<li>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Ref}}</a>{{else}}{{.Ref}}{{end}} {{.Title}} <span class="muted">{{.Status}}</span></li>{{end}}</ul>
 {{- end}}
+{{- if .CanArchive}}
+<p class="actions"><button type="button" class="archive" data-archive="{{.ID}}" data-archived="{{.Archived}}">{{if .Archived}}Unarchive{{else}}Archive{{end}}</button></p>
+{{- end}}
 </div>
 </details>
 {{- end}}
