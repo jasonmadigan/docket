@@ -9,6 +9,7 @@ docket shows every open GitHub pull request the viewer is involved in, as a term
 ```text
 cmd/docket/          subcommands, flags, wiring
 internal/config/     config file, settings store, watcher for outside edits
+internal/archive/    archive file, store, host-local lock, watcher
 internal/gh/         GraphQL over go-gh: error mapping, rate-limit budget
 internal/fetch/      discovery and detail queries; API responses into model.PR
 internal/model/      pure rules: activity, what's left, my side, sections
@@ -50,7 +51,7 @@ go install ./cmd/docket
 - Web: every route passes `guard` (Host `localhost` or an IP literal, CSP `default-src 'self'`, no inline script). Routes that change state take JSON only and refuse cross-site requests.
 - GraphQL: an error without data is a failed poll, never an empty list; partial data becomes warnings. Detail goes 10 PRs a request, since 20 drew 502s from GitHub's query time limit.
 - Engine: subscribers get only the latest state, and busy states carry no `Changed`. Row fingerprints must ignore the clock.
-- The only thing written to disk is settings, `~/.config/docket/config.toml`, atomically through `config.Store`.
+- docket writes two files, atomically and only when a person acts: settings (`~/.config/docket/config.toml`, through `config.Store`) and the archive (`archive.toml` beside it, through `archive.Store`). Never write either in the background: several hosts share them by sync.
 
 ## Style
 

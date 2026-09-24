@@ -8,7 +8,7 @@ An always-open view of every open GitHub pull request and issue I'm involved in:
 
 - Open PR or issue: listed. Closed or merged: gone.
 - No stale threshold. Nothing is demoted for being old: every row shows its age, and the longest-neglected sort first so they get noticed rather than die.
-- One mark, archive: local, and it lasts until I unarchive the item or it closes. No dismiss, snooze or mute. The only thing written to disk is settings, archive.toml and config.toml.
+- One mark, archive: local, and it lasts until I unarchive the item or it closes. No dismiss, snooze or mute. docket writes two files, settings and the archive, and only when I act.
 - github.com only, every org, no allowlist.
 - Read-only on GitHub. The actions are opening things in the browser and archiving them locally.
 - TUI and web both ship. Each runs the engine in-process. With no state, two copies running at once can't conflict; they only double a cheap poll.
@@ -150,6 +150,7 @@ Archived items are still fetched, so their rows stay whole and unarchiving shows
 ```text
 cmd/docket/        flags, config, subcommands
 internal/config/   config file
+internal/archive/  archive file, store, lock, watcher
 internal/gh/       GraphQL transport: auth from gh, rate-limit accounting
 internal/fetch/    discovery and detail queries, API responses into model.PR and model.Issue
 internal/model/    pure: tags, sections, what's left, activity age
@@ -251,6 +252,18 @@ ignore_actors = ["codecov", "openshift-ci-robot"]
 
 `poll` runs from 10s to 1h; the screens offer 30s, 1m, 2m, 5m and 10m. `ignore_actors` must be GitHub logins.
 
+The archive is `archive.toml` beside it, written only by archiving and unarchiving, never in the background, so hosts sharing the file through sync never race each other's polls. Each write takes a host-local `flock` on the directory, rereads the file, applies the change, drops entries whose archive has ended, and replaces the file in one step. A file that doesn't parse is never replaced, and at startup docket exits naming it. Hand edits apply within a couple of seconds, but the next write rewrites the file: the entries stay, and only docket's own header comment does.
+
+```toml
+[[item]]
+id = "I_kwDOAbc123"
+ref = "Kuadrant/docs#88"
+title = "document dns policy"
+at = 2026-09-24T14:02:00Z
+```
+
+`id` is the node id, which survives renames and transfers; `ref` and `title` are only for reading the file. Deleting an entry unarchives it.
+
 ## Install
 
 `go install github.com/jasonmadigan/docket/cmd/docket@latest`, or `go install ./cmd/docket` from a checkout.
@@ -263,6 +276,7 @@ ignore_actors = ["codecov", "openshift-ci-robot"]
 - `fetch` live test behind `-tags live`, using gh's login; `DOCKET_LIVE_VIA=gh` sends the queries through the gh CLI for when a firewall holds the test binary. Asserts the queries run and logs their cost.
 - `web`: `httptest` and golden HTML, including the `Host` check.
 - `tui`: `teatest` golden frames from a fixed snapshot.
+- `archive`: round trip, invalid files, two stores sharing a file, concurrent writers, an unparseable file never replaced, ended entries dropped, watching.
 
 
 ## Alternatives considered

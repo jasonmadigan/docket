@@ -39,15 +39,25 @@ type file struct {
 	IgnoreActors []string `toml:"ignore_actors"`
 }
 
-func Path() (string, error) {
+// Dir is where docket keeps its files: $XDG_CONFIG_HOME/docket, else
+// ~/.config/docket.
+func Dir() (string, error) {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
-		return filepath.Join(dir, "docket", "config.toml"), nil
+		return filepath.Join(dir, "docket"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "docket", "config.toml"), nil
+	return filepath.Join(home, ".config", "docket"), nil
+}
+
+func Path() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.toml"), nil
 }
 
 // Load reads path; a missing file means defaults.
@@ -115,16 +125,22 @@ func Save(path string, c Config) error {
 	if err := toml.NewEncoder(&buf).Encode(file{Poll: FormatPoll(c.Poll), IgnoreActors: c.IgnoreActors}); err != nil {
 		return err
 	}
+	return WriteAtomic(path, buf.Bytes())
+}
+
+// WriteAtomic replaces path with data in one step, so a reader never sees
+// half a file, creating its directory as needed.
+func WriteAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml")
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -149,7 +165,7 @@ type Store struct {
 }
 
 func NewStore(path string, cur Config, apply func(Config)) *Store {
-	return &Store{path: path, apply: apply, cur: cur, seen: modTime(path)}
+	return &Store{path: path, apply: apply, cur: cur, seen: ModTime(path)}
 }
 
 func (s *Store) Path() string { return s.path }
@@ -171,7 +187,7 @@ func (s *Store) Set(c Config) error {
 	if err := Save(s.path, c); err != nil {
 		return err
 	}
-	s.cur, s.seen = c, modTime(s.path)
+	s.cur, s.seen = c, ModTime(s.path)
 	s.apply(c)
 	return nil
 }
@@ -192,7 +208,7 @@ func (s *Store) Watch(ctx context.Context, every time.Duration) {
 }
 
 func (s *Store) reload() {
-	mod := modTime(s.path)
+	mod := ModTime(s.path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if mod.Equal(s.seen) {
@@ -207,7 +223,8 @@ func (s *Store) reload() {
 	s.apply(c)
 }
 
-func modTime(path string) time.Time {
+// ModTime is path's modification time, zero when it can't be read.
+func ModTime(path string) time.Time {
 	info, err := os.Stat(path)
 	if err != nil {
 		return time.Time{}
