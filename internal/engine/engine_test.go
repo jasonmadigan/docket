@@ -57,7 +57,7 @@ func (g *gated) refusedFor(t *testing.T, d time.Duration) {
 }
 
 func mine(id string) model.PR {
-	return model.PR{ID: id, Repo: "acme/a", Author: model.Actor{Login: "me"}, CreatedAt: now.Add(-time.Hour), Tags: []model.Tag{model.TagAuthor}}
+	return model.PR{Item: model.Item{ID: id, Repo: "acme/a", Author: model.Actor{Login: "me"}, CreatedAt: now.Add(-time.Hour), Tags: []model.Tag{model.TagAuthor}}}
 }
 
 func ok(prs ...model.PR) outcome {

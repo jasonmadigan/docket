@@ -28,20 +28,20 @@ func (p people) human(a Actor) bool {
 	return a.Login != "" && !a.Bot && !p.ignore[strings.ToLower(a.Login)]
 }
 
-// latest is the newest opening, commit or event of kinds on pr by an actor
+// latest is the newest opening, commit or event of kinds on it by an actor
 // that who accepts.
-func latest(pr PR, who func(Actor) bool, kinds ...EventKind) time.Time {
+func latest(it Item, commits []Commit, who func(Actor) bool, kinds ...EventKind) time.Time {
 	var last time.Time
 	see := func(a Actor, at time.Time) {
 		if who(a) && at.After(last) {
 			last = at
 		}
 	}
-	see(pr.Author, pr.CreatedAt)
-	for _, c := range pr.Commits {
+	see(it.Author, it.CreatedAt)
+	for _, c := range commits {
 		see(c.Author, c.At)
 	}
-	for _, e := range pr.Timeline {
+	for _, e := range it.Timeline {
 		if slices.Contains(kinds, e.Kind) {
 			see(e.Actor, e.At)
 		}
@@ -50,9 +50,9 @@ func latest(pr PR, who func(Actor) bool, kinds ...EventKind) time.Time {
 }
 
 func lastHumanActivity(pr PR, p people) time.Time {
-	return latest(pr, p.human, EventComment, EventReview, EventForcePush, EventReviewRequested)
+	return latest(pr.Item, pr.Commits, p.human, EventComment, EventReview, EventForcePush, EventReviewRequested)
 }
 
 func myLastActivity(pr PR, p people) time.Time {
-	return latest(pr, p.isMe, EventComment, EventReview, EventForcePush)
+	return latest(pr.Item, pr.Commits, p.isMe, EventComment, EventReview, EventForcePush)
 }

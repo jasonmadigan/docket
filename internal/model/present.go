@@ -1,11 +1,5 @@
 package model
 
-import "fmt"
-
-func (pr PR) Ref() string {
-	return fmt.Sprintf("%s#%d", pr.Repo, pr.Number)
-}
-
 type ReviewerState struct {
 	Name  string `json:"name"`
 	State string `json:"state"`

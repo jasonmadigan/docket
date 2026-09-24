@@ -35,11 +35,22 @@ func TestDetailBecomesModel(t *testing.T) {
 		return v
 	}
 	want := model.PR{
-		ID: "PR_1", Repo: "acme/widgets", Number: 42, Title: "Fix reconcile loop",
-		URL:    "https://github.com/acme/widgets/pull/42",
-		Author: model.Actor{Login: "alice"}, CreatedAt: ts("2026-09-01T09:00:00Z"),
+		Item: model.Item{
+			ID: "PR_1", Repo: "acme/widgets", Number: 42, Title: "Fix reconcile loop",
+			URL:    "https://github.com/acme/widgets/pull/42",
+			Author: model.Actor{Login: "alice"}, CreatedAt: ts("2026-09-01T09:00:00Z"),
+			Tags: []model.Tag{model.TagReview},
+			Timeline: []model.Event{
+				{Kind: model.EventReviewRequested, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-01T09:05:00Z"), Target: "me"},
+				{Kind: model.EventComment, Actor: model.Actor{Login: "coderabbitai", Bot: true}, At: ts("2026-09-01T09:10:00Z")},
+				{Kind: model.EventReview, Actor: model.Actor{Login: "me"}, At: ts("2026-09-02T11:00:00Z"), State: "COMMENTED"},
+				{Kind: model.EventForcePush, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-03T09:30:00Z")},
+				{Kind: model.EventMentioned, Actor: model.Actor{Login: "me"}, At: ts("2026-09-03T10:00:00Z")},
+				{Kind: model.EventComment, At: ts("2026-09-03T10:00:00Z")},
+			},
+			TimelineTruncated: true,
+		},
 		Mergeable: "MERGEABLE", MergeState: "BLOCKED", ReviewDecision: "REVIEW_REQUIRED", HeadOID: "c3",
-		Tags: []model.Tag{model.TagReview},
 		Checks: model.Checks{State: "FAILURE", FailingCount: 3, Failing: []model.Check{
 			{Name: "e2e", URL: "https://ci.example/e2e"},
 			{Name: "ci/prow", URL: "https://prow.example/1"},
@@ -56,18 +67,9 @@ func TestDetailBecomesModel(t *testing.T) {
 			{OID: "c2", At: ts("2026-09-02T09:00:00Z"), Author: model.Actor{Login: "dependabot[bot]", Bot: true}},
 			{OID: "c3", At: ts("2026-09-03T09:00:00Z"), Author: model.Actor{Login: "Alice"}},
 		},
-		Issues: []model.Issue{
+		Issues: []model.IssueRef{
 			{Repo: "acme/widgets", Number: 7, Title: "Loop never ends", URL: "https://github.com/acme/widgets/issues/7", State: "OPEN"},
 		},
-		Timeline: []model.Event{
-			{Kind: model.EventReviewRequested, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-01T09:05:00Z"), Target: "me"},
-			{Kind: model.EventComment, Actor: model.Actor{Login: "coderabbitai", Bot: true}, At: ts("2026-09-01T09:10:00Z")},
-			{Kind: model.EventReview, Actor: model.Actor{Login: "me"}, At: ts("2026-09-02T11:00:00Z"), State: "COMMENTED"},
-			{Kind: model.EventForcePush, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-03T09:30:00Z")},
-			{Kind: model.EventMentioned, Actor: model.Actor{Login: "me"}, At: ts("2026-09-03T10:00:00Z")},
-			{Kind: model.EventComment, At: ts("2026-09-03T10:00:00Z")},
-		},
-		TimelineTruncated: true,
 	}
 	if got := res.PRs[0]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got  %+v\nwant %+v", got, want)

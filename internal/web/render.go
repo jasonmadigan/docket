@@ -54,7 +54,7 @@ type rowView struct {
 	Mine      []model.Line
 	Failing   []model.Check
 	Reviewers []model.ReviewerState
-	Issues    []model.Issue
+	Issues    []model.IssueRef
 }
 
 var ciLabels = map[model.CI]string{
@@ -127,7 +127,7 @@ func rowOf(r model.Row, snap model.Snapshot) rowView {
 		Meta:      snap.Meta(r),
 		Left:      webLines(r.Left),
 		Mine:      webLines(r.Mine),
-		Reviewers: model.Reviewers(r.PR),
+		Reviewers: model.Reviewers(*r.PR),
 	}
 	for _, c := range r.PR.Checks.Failing {
 		v.Failing = append(v.Failing, model.Check{Name: c.Name, URL: webOnly(c.URL)})

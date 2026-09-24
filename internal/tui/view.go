@@ -359,7 +359,7 @@ func (m Model) detail(w, h int) string {
 	for _, c := range pr.Checks.Failing {
 		checks = append(checks, "  "+m.st.kinds[model.Bad].Render(glyph[model.Bad])+" "+linked(m.st.link, c.URL).Render(c.Name))
 	}
-	for _, rv := range model.Reviewers(pr) {
+	for _, rv := range model.Reviewers(*pr) {
 		reviewers = append(reviewers, "  "+rv.Name+" "+m.st.faint.Render(rv.State))
 	}
 	for _, is := range pr.Issues {

@@ -70,14 +70,14 @@ func TestMySide(t *testing.T) {
 		want []Line
 	}{
 		{"direct request", PR{
+			Item:     Item{Timeline: []Event{{Kind: EventReviewRequested, Actor: user("alice"), At: at(24), Target: "me"}}},
 			Requests: []Reviewer{{Name: "me"}},
-			Timeline: []Event{{Kind: EventReviewRequested, Actor: user("alice"), At: at(24), Target: "me"}},
 		}, []Line{{Kind: Wait, Text: "review requested 2d ago"}}},
 		{"direct request past the window", PR{Requests: []Reviewer{{Name: "Me"}}},
 			[]Line{{Kind: Wait, Text: "review requested"}}},
 		{"team request", PR{
+			Item:     Item{Timeline: []Event{{Kind: EventReviewRequested, Actor: user("alice"), At: at(69), Target: "acme/devs"}}},
 			Requests: []Reviewer{{Name: "acme/devs", Team: true}, {Name: "other/ops", Team: true}},
-			Timeline: []Event{{Kind: EventReviewRequested, Actor: user("alice"), At: at(69), Target: "acme/devs"}},
 		}, []Line{{Kind: Wait, Text: "review requested from acme/devs 3h ago"}}},
 		{"reviewed the head", PR{HeadOID: "c2", MyReview: &Review{State: "APPROVED", At: at(48), Commit: "c2"}},
 			[]Line{{Kind: Info, Text: "you approved 1d ago"}}},
@@ -98,30 +98,30 @@ func TestMySide(t *testing.T) {
 		}, []Line{{Kind: Wait, Text: "you commented, 2+ commits since"}}},
 		{"dismissed", PR{HeadOID: "c1", MyReview: &Review{State: "DISMISSED", At: at(48), Commit: "c1"}},
 			[]Line{{Kind: Wait, Text: "your review was dismissed 1d ago"}}},
-		{"unanswered mention", PR{
+		{"unanswered mention", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0),
 			Timeline: []Event{
 				{Kind: EventComment, Actor: user("bob"), At: at(71)},
 				{Kind: EventMentioned, Actor: user("me"), At: at(71).Add(time.Second)},
 			},
-		}, []Line{{Kind: Wait, Text: "mentioned by bob 59m ago"}}},
-		{"answered mention", PR{
+		}}, []Line{{Kind: Wait, Text: "mentioned by bob 59m ago"}}},
+		{"answered mention", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0),
 			Timeline: []Event{
 				{Kind: EventComment, Actor: user("bob"), At: at(60)},
 				{Kind: EventMentioned, Actor: user("me"), At: at(60)},
 				{Kind: EventComment, Actor: user("me"), At: at(61)},
 			},
-		}, nil},
-		{"mentioned in the description", PR{
+		}}, nil},
+		{"mentioned in the description", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(10),
 			Timeline: []Event{{Kind: EventMentioned, Actor: user("me"), At: at(10)}},
-		}, []Line{{Kind: Wait, Text: "mentioned by alice 2d ago"}}},
-		{"mentioner unknown", PR{
+		}}, []Line{{Kind: Wait, Text: "mentioned by alice 2d ago"}}},
+		{"mentioner unknown", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0),
 			Timeline: []Event{{Kind: EventMentioned, Actor: user("me"), At: at(50)}},
-		}, []Line{{Kind: Wait, Text: "mentioned 22h ago"}}},
-		{"replies since my comment", PR{
+		}}, []Line{{Kind: Wait, Text: "mentioned 22h ago"}}},
+		{"replies since my comment", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0),
 			Timeline: []Event{
 				{Kind: EventComment, Actor: user("me"), At: at(10)},
@@ -129,32 +129,34 @@ func TestMySide(t *testing.T) {
 				{Kind: EventReview, Actor: user("carol"), At: at(30), State: "COMMENTED"},
 				{Kind: EventComment, Actor: bot("coderabbitai"), At: at(40)},
 			},
-		}, []Line{{Kind: Wait, Text: "2 replies since yours"}}},
-		{"replies on my PR", PR{
+		}}, []Line{{Kind: Wait, Text: "2 replies since yours"}}},
+		{"replies on my PR", PR{Item: Item{
 			Author: user("me"), CreatedAt: at(0),
 			Timeline: []Event{{Kind: EventReview, Actor: user("bob"), At: at(5), State: "CHANGES_REQUESTED"}},
-		}, []Line{{Kind: Wait, Text: "1 reply since yours"}}},
-		{"an approval is not a reply", PR{
+		}}, []Line{{Kind: Wait, Text: "1 reply since yours"}}},
+		{"an approval is not a reply", PR{Item: Item{
 			Author: user("me"), CreatedAt: at(0),
 			Timeline: []Event{
 				{Kind: EventReview, Actor: user("bob"), At: at(5), State: "APPROVED"},
 				{Kind: EventReview, Actor: user("carol"), At: at(6), State: "DISMISSED"},
 			},
-		}, nil},
+		}}, nil},
 		{"my own PR shows no review lines", PR{
-			Author: user("me"), CreatedAt: at(0), HeadOID: "c2", CommitCount: 2,
-			Commits:  []Commit{{OID: "c1"}, {OID: "c2"}},
-			Requests: []Reviewer{{Name: "acme/devs", Team: true}},
-			MyReview: &Review{State: "COMMENTED", At: at(1), Commit: "c1"},
+			Item:        Item{Author: user("me"), CreatedAt: at(0)},
+			HeadOID:     "c2",
+			CommitCount: 2,
+			Commits:     []Commit{{OID: "c1"}, {OID: "c2"}},
+			Requests:    []Reviewer{{Name: "acme/devs", Team: true}},
+			MyReview:    &Review{State: "COMMENTED", At: at(1), Commit: "c1"},
 		}, nil},
-		{"replies beyond the window", PR{
+		{"replies beyond the window", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0), Tags: []Tag{TagCommented}, TimelineTruncated: true,
 			Timeline: []Event{{Kind: EventComment, Actor: user("bob"), At: at(20)}},
-		}, []Line{{Kind: Wait, Text: "1+ replies since yours"}}},
-		{"truncated but never spoke", PR{
+		}}, []Line{{Kind: Wait, Text: "1+ replies since yours"}}},
+		{"truncated but never spoke", PR{Item: Item{
 			Author: user("alice"), CreatedAt: at(0), Tags: []Tag{TagMentioned}, TimelineTruncated: true,
 			Timeline: []Event{{Kind: EventComment, Actor: user("bob"), At: at(20)}},
-		}, nil},
+		}}, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

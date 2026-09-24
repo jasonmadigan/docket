@@ -236,22 +236,24 @@ type pullRequest struct {
 
 func (p *pullRequest) model(tags []model.Tag) model.PR {
 	pr := model.PR{
-		ID:                p.ID,
-		Repo:              p.Repository.NameWithOwner,
-		Number:            p.Number,
-		Title:             p.Title,
-		URL:               p.URL,
-		Author:            p.Author.model(),
-		CreatedAt:         p.CreatedAt,
-		Draft:             p.IsDraft,
-		Mergeable:         p.Mergeable,
-		MergeState:        p.MergeStateStatus,
-		ReviewDecision:    p.ReviewDecision,
-		HeadOID:           p.HeadRefOID,
-		Tags:              tags,
-		MoreThreads:       p.ReviewThreads.PageInfo.HasNextPage,
-		CommitCount:       p.Commits.TotalCount,
-		TimelineTruncated: p.TimelineItems.PageInfo.HasPreviousPage,
+		Item: model.Item{
+			ID:                p.ID,
+			Repo:              p.Repository.NameWithOwner,
+			Number:            p.Number,
+			Title:             p.Title,
+			URL:               p.URL,
+			Author:            p.Author.model(),
+			CreatedAt:         p.CreatedAt,
+			Tags:              tags,
+			TimelineTruncated: p.TimelineItems.PageInfo.HasPreviousPage,
+		},
+		Draft:          p.IsDraft,
+		Mergeable:      p.Mergeable,
+		MergeState:     p.MergeStateStatus,
+		ReviewDecision: p.ReviewDecision,
+		HeadOID:        p.HeadRefOID,
+		MoreThreads:    p.ReviewThreads.PageInfo.HasNextPage,
+		CommitCount:    p.Commits.TotalCount,
 	}
 	for _, n := range p.ReviewRequests.Nodes {
 		if r := n.RequestedReviewer; r != nil {
@@ -286,7 +288,7 @@ func (p *pullRequest) model(tags []model.Tag) model.PR {
 		pr.Checks = p.Head.Nodes[0].Commit.StatusCheckRollup.model()
 	}
 	for _, i := range p.ClosingIssuesReferences.Nodes {
-		pr.Issues = append(pr.Issues, model.Issue{
+		pr.Issues = append(pr.Issues, model.IssueRef{
 			Repo: i.Repository.NameWithOwner, Number: i.Number, Title: i.Title, URL: i.URL, State: i.State,
 		})
 	}

@@ -157,14 +157,10 @@ func mySide(pr PR, p people, teams map[string]bool, now time.Time) []Line {
 			add(myReview(pr, now))
 		}
 	}
-	if at, ok := unansweredMention(pr, p); ok {
-		text := "mentioned"
-		if by := mentioner(pr, p, at); by != "" {
-			text += " by " + by
-		}
-		add(Wait, text+ago(at, now))
+	if line, ok := mentionLine(pr.Item, myLastActivity(pr, p), p, now); ok {
+		lines = append(lines, line)
 	}
-	if text := replies(pr, p); text != "" {
+	if text := replies(pr.Item, p); text != "" {
 		add(Wait, text)
 	}
 	return lines
@@ -224,20 +220,34 @@ func myReview(pr PR, now time.Time) (LineKind, string) {
 	return Wait, "rewritten since your review"
 }
 
-func unansweredMention(pr PR, p people) (time.Time, bool) {
+// mentionLine names who mentioned me and when, while nothing from me, my
+// last word being at mine, has followed.
+func mentionLine(it Item, mine time.Time, p people, now time.Time) (Line, bool) {
+	at, ok := unansweredMention(it, mine, p)
+	if !ok {
+		return Line{}, false
+	}
+	text := "mentioned"
+	if by := mentioner(it, p, at); by != "" {
+		text += " by " + by
+	}
+	return Line{Kind: Wait, Text: text + ago(at, now)}, true
+}
+
+func unansweredMention(it Item, mine time.Time, p people) (time.Time, bool) {
 	var at time.Time
-	for _, e := range pr.Timeline {
+	for _, e := range it.Timeline {
 		if e.Kind == EventMentioned && p.isMe(e.Actor) && e.At.After(at) {
 			at = e.At
 		}
 	}
-	if at.IsZero() || !myLastActivity(pr, p).Before(at) {
+	if at.IsZero() || !mine.Before(at) {
 		return time.Time{}, false
 	}
 	return at, true
 }
 
-func mentioner(pr PR, p people, at time.Time) string {
+func mentioner(it Item, p people, at time.Time) string {
 	best, gap := "", mentionSlack+1
 	see := func(a Actor, t time.Time) {
 		d := t.Sub(at).Abs()
@@ -245,8 +255,8 @@ func mentioner(pr PR, p people, at time.Time) string {
 			best, gap = a.Login, d
 		}
 	}
-	see(pr.Author, pr.CreatedAt)
-	for _, e := range pr.Timeline {
+	see(it.Author, it.CreatedAt)
+	for _, e := range it.Timeline {
 		if e.Kind == EventComment || e.Kind == EventReview {
 			see(e.Actor, e.At)
 		}
@@ -255,31 +265,31 @@ func mentioner(pr PR, p people, at time.Time) string {
 }
 
 // replies counts people's comments and reviews since my last one, or since
-// I opened the pr. Approvals and dismissals aren't replies. When my last word
+// I opened it. Approvals and dismissals aren't replies. When my last word
 // is older than the timeline window the count is a floor.
-func replies(pr PR, p people) string {
+func replies(it Item, p people) string {
 	spoke := func(e Event) bool { return e.Kind == EventComment || e.Kind == EventReview }
 	replied := func(e Event) bool {
 		return e.Kind == EventComment || (e.Kind == EventReview && e.State != "APPROVED" && e.State != "DISMISSED")
 	}
 	var mine time.Time
 	inWindow := false
-	for _, e := range pr.Timeline {
+	for _, e := range it.Timeline {
 		if spoke(e) && p.isMe(e.Actor) && e.At.After(mine) {
 			mine, inWindow = e.At, true
 		}
 	}
 	if !inWindow {
-		earlier := slices.Contains(pr.Tags, TagCommented) || slices.Contains(pr.Tags, TagReviewed)
+		earlier := slices.Contains(it.Tags, TagCommented) || slices.Contains(it.Tags, TagReviewed)
 		switch {
-		case p.isMe(pr.Author):
-			mine = pr.CreatedAt
-		case !pr.TimelineTruncated || !earlier:
+		case p.isMe(it.Author):
+			mine = it.CreatedAt
+		case !it.TimelineTruncated || !earlier:
 			return ""
 		}
 	}
 	n := 0
-	for _, e := range pr.Timeline {
+	for _, e := range it.Timeline {
 		if replied(e) && !p.isMe(e.Actor) && p.human(e.Actor) && e.At.After(mine) {
 			n++
 		}
@@ -287,7 +297,7 @@ func replies(pr PR, p people) string {
 	if n == 0 {
 		return ""
 	}
-	if !inWindow && pr.TimelineTruncated {
+	if !inWindow && it.TimelineTruncated {
 		return fmt.Sprintf("%d+ replies since yours", n)
 	}
 	return fmt.Sprintf("%d %s since yours", n, Plural(n, "reply", "replies"))

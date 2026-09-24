@@ -5,12 +5,6 @@ import (
 	"testing"
 )
 
-func TestRef(t *testing.T) {
-	if got := (PR{Repo: "acme/a", Number: 7}).Ref(); got != "acme/a#7" {
-		t.Fatalf("Ref() = %q", got)
-	}
-}
-
 func TestReviewers(t *testing.T) {
 	pr := PR{
 		Requests: []Reviewer{{Name: "bob"}, {Name: "acme/devs", Team: true}},

@@ -27,8 +27,10 @@ func url(repo, kind string, n int) string {
 
 func pr(repo string, n int, title, author string, created time.Duration, tags ...model.Tag) model.PR {
 	return model.PR{
-		ID: repo + "#" + strconv.Itoa(n), Repo: repo, Number: n, Title: title, URL: url(repo, "pull", n),
-		Author: user(author), CreatedAt: ago(created), Tags: tags,
+		Item: model.Item{
+			ID: repo + "#" + strconv.Itoa(n), Repo: repo, Number: n, Title: title, URL: url(repo, "pull", n),
+			Author: user(author), CreatedAt: ago(created), Tags: tags,
+		},
 		Mergeable: "MERGEABLE", MergeState: "BLOCKED", Checks: model.Checks{State: "SUCCESS"},
 	}
 }
@@ -63,7 +65,7 @@ func PRs() []model.PR {
 	}}
 	p.Opinions = []model.Review{{Author: user("carol"), State: "CHANGES_REQUESTED", At: ago(26 * time.Hour)}}
 	p.UnresolvedThreads = 3
-	p.Issues = []model.Issue{{Repo: "acme/operator", Number: 2287, Title: "Gateway class changes are ignored", URL: url("acme/operator", "issues", 2287), State: "OPEN"}}
+	p.Issues = []model.IssueRef{{Repo: "acme/operator", Number: 2287, Title: "Gateway class changes are ignored", URL: url("acme/operator", "issues", 2287), State: "OPEN"}}
 	p.Timeline = []model.Event{
 		{Kind: model.EventReview, Actor: user("carol"), At: ago(26 * time.Hour), State: "CHANGES_REQUESTED"},
 		{Kind: model.EventComment, Actor: user("bob"), At: ago(20 * time.Hour)},

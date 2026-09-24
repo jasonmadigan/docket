@@ -19,13 +19,18 @@ const (
 )
 
 type Row struct {
-	PR       PR        `json:"pr"`
+	PR       *PR       `json:"pr,omitempty"`
 	Teams    []string  `json:"teams,omitempty"` // my teams asked to review
 	Activity time.Time `json:"activity"`        // zero when no person has touched it
 	CI       CI        `json:"ci"`
 	Review   string    `json:"review,omitempty"`
 	Left     []Line    `json:"left"`
 	Mine     []Line    `json:"mine,omitempty"`
+}
+
+// Item is what the row's pull request shares with issues.
+func (r Row) Item() Item {
+	return r.PR.Item
 }
 
 type Section struct {
@@ -72,7 +77,7 @@ func Build(prs []PR, p Params) Snapshot {
 			continue
 		}
 		grouped[i] = append(grouped[i], Row{
-			PR:       pr,
+			PR:       &pr,
 			Teams:    myTeams(pr, teams),
 			Activity: lastHumanActivity(pr, people),
 			CI:       ciOf(pr.Checks),
@@ -160,11 +165,12 @@ func (s Snapshot) IsMe(a Actor) bool {
 
 // Meta reads like "by alice · opened 5d ago · touched 2d ago".
 func (s Snapshot) Meta(r Row) string {
+	it := r.Item()
 	var parts []string
-	if r.PR.Author.Login != "" && !s.IsMe(r.PR.Author) {
-		parts = append(parts, "by "+r.PR.Author.Login)
+	if it.Author.Login != "" && !s.IsMe(it.Author) {
+		parts = append(parts, "by "+it.Author.Login)
 	}
-	parts = append(parts, "opened "+s.Since(r.PR.CreatedAt)+" ago")
+	parts = append(parts, "opened "+s.Since(it.CreatedAt)+" ago")
 	if !r.Activity.IsZero() {
 		parts = append(parts, "touched "+s.Since(r.Activity)+" ago")
 	}
@@ -173,8 +179,9 @@ func (s Snapshot) Meta(r Row) string {
 
 // Labels are the tags, naming the teams behind a team tag.
 func (r Row) Labels() []string {
-	labels := make([]string, len(r.PR.Tags))
-	for i, t := range r.PR.Tags {
+	tags := r.Item().Tags
+	labels := make([]string, len(tags))
+	for i, t := range tags {
 		labels[i] = string(t)
 		if t == TagTeam && len(r.Teams) > 0 {
 			labels[i] += " (" + strings.Join(r.Teams, ", ") + ")"
@@ -188,12 +195,14 @@ var agoSuffix = regexp.MustCompile(` \d+(s|m|h|d|w|mo|y) ago$`)
 // Fingerprint changes when anything shown for the row does, but not when
 // time alone moves an age on.
 func (r Row) Fingerprint() string {
-	parts := []string{r.PR.Title, string(r.CI), r.Review, r.Activity.UTC().Format(time.RFC3339Nano)}
+	parts := []string{r.Item().Title, string(r.CI), r.Review, r.Activity.UTC().Format(time.RFC3339Nano)}
 	for _, l := range slices.Concat(r.Left, r.Mine) {
 		parts = append(parts, agoSuffix.ReplaceAllString(l.Text, ""))
 	}
-	for _, is := range r.PR.Issues {
-		parts = append(parts, fmt.Sprintf("%s#%d %s", is.Repo, is.Number, is.State))
+	if r.PR != nil {
+		for _, is := range r.PR.Issues {
+			parts = append(parts, fmt.Sprintf("%s#%d %s", is.Repo, is.Number, is.State))
+		}
 	}
 	return strings.Join(parts, "\x1f")
 }

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type Tag string
 
@@ -66,7 +69,8 @@ type Checks struct {
 	FailingCount int     `json:"failingCount,omitempty"` // exact, even past the first page
 }
 
-type Issue struct {
+// IssueRef is an issue a pr says it closes.
+type IssueRef struct {
 	Repo   string `json:"repo"`
 	Number int    `json:"number"`
 	Title  string `json:"title"`
@@ -74,20 +78,31 @@ type Issue struct {
 	State  string `json:"state"`
 }
 
+// Item is what pull requests and issues share.
+type Item struct {
+	ID                string    `json:"id"`
+	Repo              string    `json:"repo"`
+	Number            int       `json:"number"`
+	Title             string    `json:"title"`
+	URL               string    `json:"url"`
+	Author            Actor     `json:"author"`
+	CreatedAt         time.Time `json:"createdAt"`
+	Tags              []Tag     `json:"tags"`
+	Timeline          []Event   `json:"-"` // last 100, oldest first
+	TimelineTruncated bool      `json:"-"`
+}
+
+func (it Item) Ref() string {
+	return fmt.Sprintf("%s#%d", it.Repo, it.Number)
+}
+
 type PR struct {
-	ID                string     `json:"id"`
-	Repo              string     `json:"repo"`
-	Number            int        `json:"number"`
-	Title             string     `json:"title"`
-	URL               string     `json:"url"`
-	Author            Actor      `json:"author"`
-	CreatedAt         time.Time  `json:"createdAt"`
+	Item
 	Draft             bool       `json:"draft,omitempty"`
 	Mergeable         string     `json:"mergeable"`
 	MergeState        string     `json:"mergeState"`
 	ReviewDecision    string     `json:"reviewDecision,omitempty"`
 	HeadOID           string     `json:"headOid"`
-	Tags              []Tag      `json:"tags"`
 	Checks            Checks     `json:"checks"`
 	Requests          []Reviewer `json:"requests,omitempty"`
 	Opinions          []Review   `json:"opinions,omitempty"` // latest approval or change request per reviewer
@@ -96,7 +111,5 @@ type PR struct {
 	MoreThreads       bool       `json:"moreThreads,omitempty"` // over 100 threads; the count is a floor
 	CommitCount       int        `json:"commitCount"`
 	Commits           []Commit   `json:"-"` // last 100, oldest first
-	Issues            []Issue    `json:"issues,omitempty"`
-	Timeline          []Event    `json:"-"` // last 100, oldest first
-	TimelineTruncated bool       `json:"-"`
+	Issues            []IssueRef `json:"issues,omitempty"`
 }
