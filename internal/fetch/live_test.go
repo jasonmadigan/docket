@@ -39,7 +39,7 @@ func TestLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("viewer %s, %d teams, budget %+v", v.Login, len(v.Teams), meta.Budget)
-	res, err := f.Fetch(ctx, v.Login, nil)
+	res, err := f.Fetch(ctx, v.Login, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +53,15 @@ func TestLive(t *testing.T) {
 	for _, is := range res.Issues {
 		if is.ID == "" || is.Repo == "" || is.URL == "" || len(is.Tags) == 0 || is.CreatedAt.IsZero() {
 			t.Errorf("incomplete issue: %+v", is)
+		}
+	}
+	if len(res.Issues) > 0 {
+		gone, err := f.gone(ctx, []string{res.Issues[0].ID}, &res.Meta)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(gone) != 0 {
+			t.Errorf("an open issue counted as gone: %v", gone)
 		}
 	}
 	var out bytes.Buffer
@@ -80,15 +89,19 @@ func (ghCLI) Do(ctx context.Context, query string, vars map[string]any, out any)
 	var resp struct {
 		Data   json.RawMessage `json:"data"`
 		Errors []struct {
+			Type    string `json:"type"`
 			Message string `json:"message"`
+			Path    []any  `json:"path"`
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil {
 		return fmt.Errorf("gh api graphql: %v: %s", runErr, stderr.String())
 	}
 	var msgs []string
+	var problems []gh.Problem
 	for _, e := range resp.Errors {
 		msgs = append(msgs, e.Message)
+		problems = append(problems, gh.Problem{Type: e.Type, Message: e.Message, Path: e.Path})
 	}
 	if len(resp.Data) == 0 || string(resp.Data) == "null" {
 		return fmt.Errorf("github: %s", strings.Join(msgs, "; "))
@@ -97,7 +110,7 @@ func (ghCLI) Do(ctx context.Context, query string, vars map[string]any, out any)
 		return err
 	}
 	if len(msgs) > 0 {
-		return &gh.PartialError{Messages: msgs}
+		return &gh.PartialError{Messages: msgs, Problems: problems}
 	}
 	return nil
 }

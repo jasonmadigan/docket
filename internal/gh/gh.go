@@ -29,10 +29,18 @@ func (e *RateLimitedError) Error() string {
 	return "rate limited until " + e.Until.Local().Format("15:04:05")
 }
 
+// Problem is one error github sent alongside data.
+type Problem struct {
+	Type    string // NOT_FOUND, FORBIDDEN and the like; empty when github gave none
+	Message string
+	Path    []any // where in the response it applies, e.g. ["nodes", 3]
+}
+
 // PartialError means data came back alongside errors, e.g. from an org
 // enforcing SAML. The data has still been decoded.
 type PartialError struct {
-	Messages []string
+	Messages []string // each distinct message once
+	Problems []Problem
 }
 
 func (e *PartialError) Error() string {
@@ -110,10 +118,12 @@ func (c *Client) fromHTTP(e *api.HTTPError) error {
 // query), since an empty result would read as nothing being open.
 func fromGraphQL(e *api.GraphQLError, data json.RawMessage, out any) error {
 	var msgs []string
+	var problems []Problem
 	for _, item := range e.Errors {
 		if item.Type == "RATE_LIMITED" {
 			return &RateLimitedError{}
 		}
+		problems = append(problems, Problem{Type: item.Type, Message: item.Message, Path: item.Path})
 		if !slices.Contains(msgs, item.Message) {
 			msgs = append(msgs, item.Message)
 		}
@@ -124,5 +134,5 @@ func fromGraphQL(e *api.GraphQLError, data json.RawMessage, out any) error {
 	if err := json.Unmarshal(data, out); err != nil {
 		return err
 	}
-	return &PartialError{Messages: msgs}
+	return &PartialError{Messages: msgs, Problems: problems}
 }

@@ -15,6 +15,9 @@ import (
 // search returns at most 1,000 results: ten pages of 100.
 const maxPages = 10
 
+// lookupBatch is how many archived ids gone() resolves a request.
+const lookupBatch = 100
+
 type Transport interface {
 	Do(ctx context.Context, query string, vars map[string]any, out any) error
 }
@@ -45,6 +48,7 @@ type Meta struct {
 type Result struct {
 	PRs    []model.PR
 	Issues []model.Issue
+	Gone   []string // archived items closed, merged, or no longer there
 	Meta
 }
 
@@ -137,7 +141,7 @@ func (f *Fetcher) Viewer(ctx context.Context) (Viewer, Meta, error) {
 	}
 }
 
-func (f *Fetcher) Fetch(ctx context.Context, login string, progress func(Progress)) (Result, error) {
+func (f *Fetcher) Fetch(ctx context.Context, login string, archived []string, progress func(Progress)) (Result, error) {
 	if progress == nil {
 		progress = func(Progress) {}
 	}
@@ -155,7 +159,73 @@ func (f *Fetcher) Fetch(ctx context.Context, login string, progress func(Progres
 	if res.Issues, err = f.issueDetails(ctx, issueTags, &res.Meta, c); err != nil {
 		return Result{}, fmt.Errorf("issue details: %w", err)
 	}
+	var missing []string
+	for _, id := range archived {
+		_, pr := prTags[id]
+		_, is := issueTags[id]
+		if !pr && !is {
+			missing = append(missing, id)
+		}
+	}
+	if res.Gone, err = f.gone(ctx, missing, &res.Meta); err != nil {
+		return Result{}, fmt.Errorf("archived: %w", err)
+	}
 	return res, nil
+}
+
+// gone looks up archived items discovery no longer finds. Closed, merged
+// and ids github can't resolve (deleted, or no longer visible) have ended
+// their archive. A null node for any other reason, such as an org
+// enforcing SAML, is left alone, its message kept as a warning.
+func (f *Fetcher) gone(ctx context.Context, ids []string, meta *Meta) ([]string, error) {
+	var out []string
+	for batch := range slices.Chunk(ids, lookupBatch) {
+		var resp struct {
+			RateLimit gh.Budget `json:"rateLimit"`
+			Nodes     []*struct {
+				ID    string `json:"id"`
+				State string `json:"state"`
+			} `json:"nodes"`
+		}
+		err := f.t.Do(ctx, stateQuery, map[string]any{"ids": batch}, &resp)
+		var partial *gh.PartialError
+		switch {
+		case errors.As(err, &partial):
+			for _, p := range partial.Problems {
+				if i, ok := nodeIndex(p.Path); ok && p.Type == "NOT_FOUND" && i < len(batch) {
+					out = append(out, batch[i])
+				} else if !slices.Contains(meta.Warnings, p.Message) {
+					meta.Warnings = append(meta.Warnings, p.Message)
+				}
+			}
+		case err != nil:
+			return nil, err
+		}
+		if resp.Nodes == nil {
+			return nil, errors.New("nodes missing from the response")
+		}
+		meta.saw(resp.RateLimit)
+		for _, n := range resp.Nodes {
+			if n != nil && (n.State == "CLOSED" || n.State == "MERGED") {
+				out = append(out, n.ID)
+			}
+		}
+	}
+	return out, nil
+}
+
+// nodeIndex reads which of nodes(ids:) an error's path points at.
+func nodeIndex(path []any) (int, bool) {
+	if len(path) < 2 || path[0] != "nodes" {
+		return 0, false
+	}
+	switch i := path[1].(type) {
+	case float64:
+		return int(i), true
+	case int:
+		return i, true
+	}
+	return 0, false
 }
 
 func (f *Fetcher) discover(ctx context.Context, meta *Meta) (prs, issues map[string][]model.Tag, err error) {

@@ -129,6 +129,23 @@ func TestDoMapsErrors(t *testing.T) {
 	}
 }
 
+func TestDoKeepsEachProblem(t *testing.T) {
+	body := `{"data":{"nodes":[null,{"id":"I_2"}]},"errors":[` +
+		`{"type":"NOT_FOUND","path":["nodes",0],"message":"Could not resolve to a node with the global id of 'I_1'"}]}`
+	var out struct {
+		Nodes []any `json:"nodes"`
+	}
+	err := client(t, respond(200, nil, body)).Do(context.Background(), "q", nil, &out)
+	var partial *PartialError
+	if !errors.As(err, &partial) {
+		t.Fatalf("err = %v, want *PartialError", err)
+	}
+	want := []Problem{{Type: "NOT_FOUND", Message: "Could not resolve to a node with the global id of 'I_1'", Path: []any{"nodes", float64(0)}}}
+	if !reflect.DeepEqual(partial.Problems, want) {
+		t.Fatalf("problems = %#v", partial.Problems)
+	}
+}
+
 func TestDoFailsWhenNoDataCameBack(t *testing.T) {
 	for _, body := range []string{
 		`{"data":null,"errors":[{"type":"INTERNAL","message":"Something went wrong while executing your query"}]}`,

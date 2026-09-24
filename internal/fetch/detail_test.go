@@ -20,7 +20,7 @@ func TestDetailBecomesModel(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"review": found("PR_1"), "requested": found("PR_1")})},
 		{match: matchDetail, data: string(raw)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestIssueDetailBecomesModel(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"issueAssigned": found("I_1")})},
 		{match: matchIssues, data: string(raw)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

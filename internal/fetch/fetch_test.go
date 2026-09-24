@@ -113,7 +113,7 @@ func TestFetchTagsEachPR(t *testing.T) {
 		})},
 		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"), minimal("PR_C"))},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestFetchFollowsPages(t *testing.T) {
 		{match: matchPage, data: "{" + budget + `, "search": ` + found("PR_B") + "}"},
 		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"))},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestFetchStopsAtTheSearchCap(t *testing.T) {
 		replies = append(replies, reply{match: matchPage, data: "{" + budget + `, "search": ` + more + "}"})
 	}
 	f := &fake{t: t, replies: replies}
-	if _, err := New(f).Fetch(context.Background(), "me", nil); err != nil {
+	if _, err := New(f).Fetch(context.Background(), "me", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	f.finished()
@@ -178,7 +178,7 @@ func TestFetchBatchesDetail(t *testing.T) {
 	}}
 	fetcher := New(f)
 	fetcher.prBatch = 2
-	res, err := fetcher.Fetch(context.Background(), "me", nil)
+	res, err := fetcher.Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestFetchKeepsPartialData(t *testing.T) {
 		{match: matchDetail, data: details(minimal("PR_A"), "null"),
 			err: &gh.PartialError{Messages: []string{"SAML enforcement"}}},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,14 +215,14 @@ func TestFetchKeepsPartialData(t *testing.T) {
 func TestFetchFailsOnError(t *testing.T) {
 	boom := errors.New("boom")
 	f := &fake{t: t, replies: []reply{{match: matchDiscovery, err: boom}}}
-	if _, err := New(f).Fetch(context.Background(), "me", nil); !errors.Is(err, boom) {
+	if _, err := New(f).Fetch(context.Background(), "me", nil, nil); !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
 	}
 }
 
 func TestFetchNothingOpen(t *testing.T) {
 	f := &fake{t: t, replies: []reply{{match: matchDiscovery, data: discovery(nil)}}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil || len(res.PRs) != 0 {
 		t.Fatalf("got %+v, %v", res, err)
 	}
@@ -278,7 +278,7 @@ func TestFetchFailsWhenResultsAreMissing(t *testing.T) {
 	for name, replies := range cases {
 		t.Run(name, func(t *testing.T) {
 			f := &fake{t: t, replies: replies}
-			if _, err := New(f).Fetch(context.Background(), "me", nil); err == nil {
+			if _, err := New(f).Fetch(context.Background(), "me", nil, nil); err == nil {
 				t.Fatal("Fetch succeeded without the data it asked for")
 			}
 		})
@@ -300,7 +300,7 @@ func TestFetchDropsPRsClosedSinceSearchIndexed(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A", "PR_B")})},
 		{match: matchDetail, data: details(minimal("PR_A"), merged)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestFetchDetailsTenAtATime(t *testing.T) {
 		{match: matchDetail, data: details(nodes[10:20]...)},
 		{match: matchDetail, data: details(nodes[20:]...)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestFetchReportsProgress(t *testing.T) {
 	fetcher := New(f)
 	fetcher.prBatch = 2
 	var got []Progress
-	if _, err := fetcher.Fetch(context.Background(), "me", func(p Progress) { got = append(got, p) }); err != nil {
+	if _, err := fetcher.Fetch(context.Background(), "me", nil, func(p Progress) { got = append(got, p) }); err != nil {
 		t.Fatal(err)
 	}
 	want := []Progress{
@@ -387,7 +387,7 @@ func TestFetchFindsIssuesApartFromPRs(t *testing.T) {
 		{match: matchDetail, data: details(minimal("PR_A"))},
 		{match: matchIssues, data: details(minimalIssue("I_A"), minimalIssue("I_B"), minimalIssue("I_C"))},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestIssuePagesKeepTheIssueScope(t *testing.T) {
 		{match: matchPage, data: "{" + budget + `, "search": ` + found("I_B") + "}"},
 		{match: matchIssues, data: details(minimalIssue("I_A"), minimalIssue("I_B"))},
 	}}
-	if _, err := New(f).Fetch(context.Background(), "me", nil); err != nil {
+	if _, err := New(f).Fetch(context.Background(), "me", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	f.finished()
@@ -443,7 +443,7 @@ func TestFetchDetailsIssuesTwentyFiveAtATime(t *testing.T) {
 		{match: matchIssues, data: details(nodes[:25]...)},
 		{match: matchIssues, data: details(nodes[25:]...)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,11 +459,107 @@ func TestFetchDropsIssuesClosedSinceSearchIndexed(t *testing.T) {
 		{match: matchDiscovery, data: discovery(map[string]string{"issueAuthor": found("I_A", "I_B")})},
 		{match: matchIssues, data: details(minimalIssue("I_A"), closed)},
 	}}
-	res, err := New(f).Fetch(context.Background(), "me", nil)
+	res, err := New(f).Fetch(context.Background(), "me", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(res.Issues) != 1 || res.Issues[0].ID != "I_A" {
 		t.Fatalf("issues = %+v, want only the open one", res.Issues)
 	}
+}
+
+const matchLookup = "... on Issue { id state }"
+
+// states answers a lookup; an empty id stands for a null node.
+func states(pairs ...string) string {
+	var nodes []string
+	for i := 0; i < len(pairs); i += 2 {
+		if pairs[i] == "" {
+			nodes = append(nodes, "null")
+			continue
+		}
+		nodes = append(nodes, fmt.Sprintf(`{"id": %q, "state": %q}`, pairs[i], pairs[i+1]))
+	}
+	return "{" + budget + `, "nodes": [` + strings.Join(nodes, ", ") + "]}"
+}
+
+func TestFetchLooksUpArchivedItemsItDidNotFind(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A")})},
+		{match: matchDetail, data: details(minimal("PR_A"))},
+		{match: matchLookup, data: states("I_GONE", "CLOSED", "I_OPEN", "OPEN", "PR_M", "MERGED")},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", []string{"PR_A", "I_GONE", "I_OPEN", "PR_M"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if got := f.calls[2].vars["ids"]; !reflect.DeepEqual(got, []string{"I_GONE", "I_OPEN", "PR_M"}) {
+		t.Fatalf("looked up %v", got)
+	}
+	if !reflect.DeepEqual(res.Gone, []string{"I_GONE", "PR_M"}) {
+		t.Fatalf("gone = %v", res.Gone)
+	}
+}
+
+func TestFetchSkipsTheLookupWhenDiscoveryFoundThemAll(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A")})},
+		{match: matchDetail, data: details(minimal("PR_A"))},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", []string{"PR_A"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if res.Gone != nil {
+		t.Fatalf("gone = %v", res.Gone)
+	}
+}
+
+func TestLookupCountsWhatGitHubCannotResolveAsGone(t *testing.T) {
+	deleted := "Could not resolve to a node with the global id of 'I_DELETED'"
+	saml := "Resource protected by organization SAML enforcement."
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(nil)},
+		{match: matchLookup, data: states("", "", "", ""), err: &gh.PartialError{
+			Messages: []string{deleted, saml},
+			Problems: []gh.Problem{
+				{Type: "NOT_FOUND", Message: deleted, Path: []any{"nodes", float64(0)}},
+				{Type: "FORBIDDEN", Message: saml, Path: []any{"nodes", float64(1)}},
+			},
+		}},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", []string{"I_DELETED", "I_SAML"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(res.Gone, []string{"I_DELETED"}) {
+		t.Fatalf("gone = %v", res.Gone)
+	}
+	if !reflect.DeepEqual(res.Warnings, []string{saml}) {
+		t.Fatalf("warnings = %q", res.Warnings)
+	}
+}
+
+func TestLookupGoesAHundredAtATime(t *testing.T) {
+	archived := make([]string, 150)
+	var first, second []string
+	for i := range archived {
+		archived[i] = fmt.Sprintf("I_%03d", i)
+		if i < 100 {
+			first = append(first, archived[i], "OPEN")
+		} else {
+			second = append(second, archived[i], "OPEN")
+		}
+	}
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(nil)},
+		{match: matchLookup, data: states(first...)},
+		{match: matchLookup, data: states(second...)},
+	}}
+	if _, err := New(f).Fetch(context.Background(), "me", archived, nil); err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
 }

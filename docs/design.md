@@ -172,7 +172,8 @@ Each tick:
 
 1. Discovery: one GraphQL request, a `search` alias per qualifier, PRs and issues alike, ids only. Pages past 100 are followed.
 2. Detail for every discovered PR and issue, through `nodes(ids:)`: PRs 10 a request, issues 25.
-3. `model` builds a snapshot from detail and tags; the engine publishes it to subscribers.
+3. Archived items discovery didn't return are looked up, `id` and `state` only, 100 a request. Closed, merged, or an id GitHub answers `NOT_FOUND` for (deleted, or no longer visible) has ended its archive, and the entry goes at the next archive or unarchive; left alone, it would raise a warning every poll for an entry no screen can unarchive. A null node for any other reason, such as an org enforcing SAML, is left alone. `dump` skips this step.
+4. `model` builds a snapshot from detail and tags; the engine publishes it to subscribers.
 
 No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR or issue that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot, and detail drops any whose state isn't open, since search lags. A GraphQL error that comes back without data is a failed poll, never an empty list.
 

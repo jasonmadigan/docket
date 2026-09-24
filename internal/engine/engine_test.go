@@ -28,7 +28,7 @@ func (g *gated) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	return fetch.Viewer{Login: "me"}, fetch.Meta{}, nil
 }
 
-func (g *gated) Fetch(ctx context.Context, _ string, progress func(fetch.Progress)) (fetch.Result, error) {
+func (g *gated) Fetch(ctx context.Context, _ string, _ []string, progress func(fetch.Progress)) (fetch.Result, error) {
 	progress(fetch.Progress{Phase: "details", Done: 1, Total: 2})
 	select {
 	case o := <-g.results:
@@ -226,7 +226,7 @@ func (s *static) Viewer(context.Context) (fetch.Viewer, fetch.Meta, error) {
 	return fetch.Viewer{Login: "me"}, fetch.Meta{Warnings: []string{"teams hidden"}}, nil
 }
 
-func (s *static) Fetch(context.Context, string, func(fetch.Progress)) (fetch.Result, error) {
+func (s *static) Fetch(context.Context, string, []string, func(fetch.Progress)) (fetch.Result, error) {
 	return fetch.Result{PRs: []model.PR{mine("a")}, Meta: fetch.Meta{Warnings: []string{"saml"}}}, nil
 }
 

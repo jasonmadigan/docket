@@ -124,6 +124,11 @@ const issueDetailQuery = `query($ids: [ID!]!) {
   }
 }`
 
+const stateQuery = `query($ids: [ID!]!) {
+  ` + rateLimit + `
+  nodes(ids: $ids) { ... on Issue { id state } ... on PullRequest { id state } }
+}`
+
 const viewerQuery = `query {
   ` + rateLimit + `
   viewer { login }

@@ -14,7 +14,7 @@ import (
 
 type Source interface {
 	Viewer(ctx context.Context) (fetch.Viewer, fetch.Meta, error)
-	Fetch(ctx context.Context, login string, progress func(fetch.Progress)) (fetch.Result, error)
+	Fetch(ctx context.Context, login string, archived []string, progress func(fetch.Progress)) (fetch.Result, error)
 }
 
 type Config struct {
@@ -195,7 +195,7 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 		e.viewer, e.viewerAt, e.viewerWarnings = v, now, meta.Warnings
 		keepBudget(st, meta.Budget)
 	}
-	res, err := e.src.Fetch(ctx, e.viewer.Login, busy)
+	res, err := e.src.Fetch(ctx, e.viewer.Login, nil, busy)
 	if err != nil {
 		return err
 	}
