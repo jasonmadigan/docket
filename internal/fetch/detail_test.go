@@ -47,6 +47,7 @@ func TestDetailBecomesModel(t *testing.T) {
 				{Kind: model.EventForcePush, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-03T09:30:00Z")},
 				{Kind: model.EventMentioned, Actor: model.Actor{Login: "me"}, At: ts("2026-09-03T10:00:00Z")},
 				{Kind: model.EventComment, At: ts("2026-09-03T10:00:00Z")},
+				{Kind: model.EventReopened, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-03T11:00:00Z")},
 			},
 			TimelineTruncated: true,
 		},
@@ -77,7 +78,60 @@ func TestDetailBecomesModel(t *testing.T) {
 }
 
 func TestMyReviewSkipsPendingDrafts(t *testing.T) {
-	if !strings.Contains(detailQuery, "reviews(last: 1, author: $login, states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED])") {
+	if !strings.Contains(prDetailQuery, "reviews(last: 1, author: $login, states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED])") {
 		t.Fatal("myReviews can return a pending draft, which hides the submitted review")
+	}
+}
+
+func TestIssueDetailBecomesModel(t *testing.T) {
+	raw, err := os.ReadFile("testdata/issue.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"issueAssigned": found("I_1")})},
+		{match: matchIssues, data: string(raw)},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if len(res.Issues) != 1 || len(res.PRs) != 0 {
+		t.Fatalf("got %d issues, %d PRs", len(res.Issues), len(res.PRs))
+	}
+	ts := func(s string) time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	want := model.Issue{
+		Item: model.Item{
+			ID: "I_1", Repo: "acme/widgets", Number: 7, Title: "Loop never ends",
+			URL: "https://github.com/acme/widgets/issues/7", Author: model.Actor{Login: "alice"},
+			CreatedAt: ts("2026-09-01T09:00:00Z"), Tags: []model.Tag{model.TagAssigned},
+			Timeline: []model.Event{
+				{Kind: model.EventAssigned, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-01T09:05:00Z"), Target: "me"},
+				{Kind: model.EventComment, Actor: model.Actor{Login: "bob"}, At: ts("2026-09-02T10:00:00Z")},
+				{Kind: model.EventMentioned, Actor: model.Actor{Login: "me"}, At: ts("2026-09-02T10:00:00Z")},
+				{Kind: model.EventReferenced, Actor: model.Actor{Login: "carol"}, At: ts("2026-09-03T08:00:00Z")},
+				{Kind: model.EventReopened, Actor: model.Actor{Login: "alice"}, At: ts("2026-09-04T08:00:00Z")},
+				{Kind: model.EventAssigned, Actor: model.Actor{Login: "triage-bot", Bot: true}, At: ts("2026-09-04T09:00:00Z")},
+				{Kind: model.EventComment, Actor: model.Actor{Login: "stale", Bot: true}, At: ts("2026-09-05T08:00:00Z")},
+			},
+			TimelineTruncated: true,
+		},
+		Assignees: []model.Actor{{Login: "me"}, {Login: "bob"}},
+		Labels:    []string{"bug", "kind/regression"},
+		SubIssues: model.SubIssues{Total: 4, Completed: 1},
+		PRs: []model.PRRef{
+			{Repo: "acme/widgets", Number: 42, Title: "Fix reconcile loop", URL: "https://github.com/acme/widgets/pull/42", State: "OPEN", Draft: true},
+			{Repo: "acme/core", Number: 9, Title: "Guard the loop", URL: "https://github.com/acme/core/pull/9", State: "MERGED"},
+		},
+	}
+	if got := res.Issues[0]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got  %+v\nwant %+v", got, want)
 	}
 }

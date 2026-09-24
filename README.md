@@ -75,7 +75,7 @@ ignore_actors = ["codecov", "openshift-ci-robot"]
 
 ## Rate limit
 
-A refresh costs a few GraphQL points: one to find your PRs, then roughly one per ten for their detail. Two dozen PRs cost 4 or 5, out of the 5,000 an hour your token shares with everything else using it. With under a tenth left, docket waits for the reset.
+A refresh costs a few GraphQL points: one to find your PRs and issues, then roughly one per ten PRs and one per 25 issues for their detail. Two dozen PRs and a hundred issues cost about 10, out of the 5,000 an hour your token shares with everything else using it. With under a tenth left, docket waits for the reset.
 
 ## Firewalls
 

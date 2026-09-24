@@ -1,0 +1,33 @@
+{
+  "rateLimit": {"cost": 1, "remaining": 4979, "limit": 5000, "resetAt": "2026-09-23T13:00:00Z"},
+  "nodes": [
+    {
+      "id": "I_1",
+      "number": 7,
+      "state": "OPEN",
+      "title": "Loop never ends",
+      "url": "https://github.com/acme/widgets/issues/7",
+      "createdAt": "2026-09-01T09:00:00Z",
+      "author": {"__typename": "User", "login": "alice"},
+      "repository": {"nameWithOwner": "acme/widgets"},
+      "assignees": {"nodes": [{"login": "me"}, {"login": "bob"}]},
+      "labels": {"nodes": [{"name": "bug"}, {"name": "kind/regression"}]},
+      "subIssuesSummary": {"total": 4, "completed": 1},
+      "closedByPullRequestsReferences": {"nodes": [
+        {"number": 42, "title": "Fix reconcile loop", "url": "https://github.com/acme/widgets/pull/42", "state": "OPEN", "isDraft": true, "repository": {"nameWithOwner": "acme/widgets"}},
+        {"number": 40, "title": "First try", "url": "https://github.com/acme/widgets/pull/40", "state": "CLOSED", "isDraft": false, "repository": {"nameWithOwner": "acme/widgets"}},
+        {"number": 9, "title": "Guard the loop", "url": "https://github.com/acme/core/pull/9", "state": "MERGED", "isDraft": false, "repository": {"nameWithOwner": "acme/core"}}
+      ]},
+      "timelineItems": {"pageInfo": {"hasPreviousPage": true}, "nodes": [
+        {"__typename": "AssignedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-01T09:05:00Z", "assignee": {"__typename": "User", "login": "me"}},
+        {"__typename": "IssueComment", "author": {"__typename": "User", "login": "bob"}, "createdAt": "2026-09-02T10:00:00Z"},
+        {"__typename": "MentionedEvent", "actor": {"__typename": "User", "login": "me"}, "createdAt": "2026-09-02T10:00:00Z"},
+        {"__typename": "CrossReferencedEvent", "actor": {"__typename": "User", "login": "carol"}, "createdAt": "2026-09-03T08:00:00Z"},
+        {"__typename": "ReopenedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-04T08:00:00Z"},
+        {"__typename": "AssignedEvent", "actor": {"__typename": "Bot", "login": "triage-bot"}, "createdAt": "2026-09-04T09:00:00Z", "assignee": null},
+        {"__typename": "IssueComment", "author": {"__typename": "Bot", "login": "stale"}, "createdAt": "2026-09-05T08:00:00Z"}
+      ]}
+    },
+    null
+  ]
+}

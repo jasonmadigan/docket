@@ -130,6 +130,7 @@ type timelineItem struct {
 	SubmittedAt       *time.Time `json:"submittedAt"`
 	State             string     `json:"state"`
 	RequestedReviewer *reviewer  `json:"requestedReviewer"`
+	Assignee          *actor     `json:"assignee"`
 }
 
 func (it timelineItem) model() (model.Event, bool) {
@@ -150,6 +151,12 @@ func (it timelineItem) model() (model.Event, bool) {
 		}
 	case "MentionedEvent":
 		e = model.Event{Kind: model.EventMentioned, Actor: it.Actor.model()}
+	case "AssignedEvent":
+		e = model.Event{Kind: model.EventAssigned, Actor: it.Actor.model(), Target: it.Assignee.model().Login}
+	case "CrossReferencedEvent":
+		e = model.Event{Kind: model.EventReferenced, Actor: it.Actor.model()}
+	case "ReopenedEvent":
+		e = model.Event{Kind: model.EventReopened, Actor: it.Actor.model()}
 	default:
 		return model.Event{}, false
 	}
@@ -158,6 +165,23 @@ func (it timelineItem) model() (model.Event, bool) {
 	}
 	e.At = *at
 	return e, true
+}
+
+type timeline struct {
+	PageInfo struct {
+		HasPreviousPage bool `json:"hasPreviousPage"`
+	} `json:"pageInfo"`
+	Nodes []timelineItem `json:"nodes"`
+}
+
+func (t timeline) events() []model.Event {
+	var out []model.Event
+	for _, it := range t.Nodes {
+		if e, ok := it.model(); ok {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 type pullRequest struct {
@@ -226,12 +250,7 @@ type pullRequest struct {
 			} `json:"repository"`
 		} `json:"nodes"`
 	} `json:"closingIssuesReferences"`
-	TimelineItems struct {
-		PageInfo struct {
-			HasPreviousPage bool `json:"hasPreviousPage"`
-		} `json:"pageInfo"`
-		Nodes []timelineItem `json:"nodes"`
-	} `json:"timelineItems"`
+	TimelineItems timeline `json:"timelineItems"`
 }
 
 func (p *pullRequest) model(tags []model.Tag) model.PR {
@@ -245,6 +264,7 @@ func (p *pullRequest) model(tags []model.Tag) model.PR {
 			Author:            p.Author.model(),
 			CreatedAt:         p.CreatedAt,
 			Tags:              tags,
+			Timeline:          p.TimelineItems.events(),
 			TimelineTruncated: p.TimelineItems.PageInfo.HasPreviousPage,
 		},
 		Draft:          p.IsDraft,
@@ -292,10 +312,74 @@ func (p *pullRequest) model(tags []model.Tag) model.PR {
 			Repo: i.Repository.NameWithOwner, Number: i.Number, Title: i.Title, URL: i.URL, State: i.State,
 		})
 	}
-	for _, it := range p.TimelineItems.Nodes {
-		if e, ok := it.model(); ok {
-			pr.Timeline = append(pr.Timeline, e)
+	return pr
+}
+
+type linkedPR struct {
+	Number     int    `json:"number"`
+	Title      string `json:"title"`
+	URL        string `json:"url"`
+	State      string `json:"state"`
+	IsDraft    bool   `json:"isDraft"`
+	Repository struct {
+		NameWithOwner string `json:"nameWithOwner"`
+	} `json:"repository"`
+}
+
+type issue struct {
+	ID         string    `json:"id"`
+	Number     int       `json:"number"`
+	State      string    `json:"state"`
+	Title      string    `json:"title"`
+	URL        string    `json:"url"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Author     *actor    `json:"author"`
+	Repository struct {
+		NameWithOwner string `json:"nameWithOwner"`
+	} `json:"repository"`
+	Assignees struct {
+		Nodes []*actor `json:"nodes"`
+	} `json:"assignees"`
+	Labels struct {
+		Nodes []struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	} `json:"labels"`
+	SubIssuesSummary *struct {
+		Total     int `json:"total"`
+		Completed int `json:"completed"`
+	} `json:"subIssuesSummary"`
+	ClosedByPullRequestsReferences struct {
+		Nodes []linkedPR `json:"nodes"`
+	} `json:"closedByPullRequestsReferences"`
+	TimelineItems timeline `json:"timelineItems"`
+}
+
+func (i *issue) model(tags []model.Tag) model.Issue {
+	is := model.Issue{Item: model.Item{
+		ID: i.ID, Repo: i.Repository.NameWithOwner, Number: i.Number, Title: i.Title, URL: i.URL,
+		Author: i.Author.model(), CreatedAt: i.CreatedAt, Tags: tags,
+		Timeline: i.TimelineItems.events(), TimelineTruncated: i.TimelineItems.PageInfo.HasPreviousPage,
+	}}
+	for _, a := range i.Assignees.Nodes {
+		if a != nil {
+			is.Assignees = append(is.Assignees, a.model())
 		}
 	}
-	return pr
+	for _, l := range i.Labels.Nodes {
+		is.Labels = append(is.Labels, l.Name)
+	}
+	if s := i.SubIssuesSummary; s != nil {
+		is.SubIssues = model.SubIssues{Total: s.Total, Completed: s.Completed}
+	}
+	for _, pr := range i.ClosedByPullRequestsReferences.Nodes {
+		if pr.State == "CLOSED" {
+			continue // closed unmerged, it no longer bears on the issue
+		}
+		is.PRs = append(is.PRs, model.PRRef{
+			Repo: pr.Repository.NameWithOwner, Number: pr.Number, Title: pr.Title, URL: pr.URL,
+			State: pr.State, Draft: pr.IsDraft,
+		})
+	}
+	return is
 }

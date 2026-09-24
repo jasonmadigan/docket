@@ -2,11 +2,11 @@
 
 Design notes, September 2026.
 
-An always-open view of every open GitHub pull request I'm involved in: state, CI, what's left, linked issues, time since anyone touched it. A terminal UI and a web page over one engine, run locally on whichever machine I'm on.
+An always-open view of every open GitHub pull request and issue I'm involved in: state, CI, what's left, linked issues and PRs, time since anyone touched it. A terminal UI and a web page over one engine, run locally on whichever machine I'm on.
 
 ## Decisions
 
-- Open PR: listed. Closed or merged: gone.
+- Open PR or issue: listed. Closed or merged: gone.
 - No stale threshold. Nothing is demoted for being old: every row shows its age, and the longest-neglected sort first so they get noticed rather than die.
 - No dismiss, snooze, mute or other marks. The only thing written to disk is settings.
 - github.com only, every org, no allowlist.
@@ -38,6 +38,22 @@ A PR is listed when any qualifier below matches, each combined with `is:pr is:op
 | Participating | `reviewed`, `commented` |
 
 A PR sits in the first section it matches. Empty sections are hidden. Within a section, oldest last human activity first.
+
+An issue is listed the same way, each qualifier combined with `is:issue is:open archived:false`, and filed by the same rule.
+
+| Tag | Meaning | Qualifier |
+|-|-|-|
+| `author` | I opened it | `author:@me` |
+| `assigned` | assigned to me | `assignee:@me` |
+| `mentioned` | @-mentioned | `mentions:@me` |
+| `commented` | I commented | `commenter:@me` |
+
+| Section | Holds |
+|-|-|
+| Mine | `author` |
+| Assigned | `assigned` |
+| Mentioned | `mentioned` |
+| Participating | `commented` |
 
 ## Per PR
 
@@ -129,7 +145,7 @@ The latest opening, comment, assignment, cross-reference or reopening by a perso
 cmd/docket/        flags, config, subcommands
 internal/config/   config file
 internal/gh/       GraphQL transport: auth from gh, rate-limit accounting
-internal/fetch/    discovery and detail queries, API responses into model.PR
+internal/fetch/    discovery and detail queries, API responses into model.PR and model.Issue
 internal/model/    pure: tags, sections, what's left, activity age
 internal/engine/   poll loop, snapshot fan-out
 internal/tui/      Bubble Tea view
@@ -147,15 +163,15 @@ Libraries: `github.com/cli/go-gh/v2` (auth, GraphQL client), Bubble Tea, Bubbles
 
 Each tick:
 
-1. Discovery: one GraphQL request, a `search` alias per qualifier, ids only. Pages past 100 are followed.
-2. Detail for every discovered PR, through `nodes(ids:)`, 10 per request.
+1. Discovery: one GraphQL request, a `search` alias per qualifier, PRs and issues alike, ids only. Pages past 100 are followed.
+2. Detail for every discovered PR and issue, through `nodes(ids:)`: PRs 10 a request, issues 25.
 3. `model` builds a snapshot from detail and tags; the engine publishes it to subscribers.
 
-No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot, and detail drops any PR whose state isn't open, since search lags merges. A GraphQL error that comes back without data is a failed poll, never an empty list.
+No change detection. Refetching everything is cheap at this volume, and several changes don't reliably bump `updatedAt` (checks finishing, base branch moving, threads resolved, linked issues closed). A PR or issue that drops out of discovery (closed, merged, no longer involving me) is gone from the next snapshot, and detail drops any whose state isn't open, since search lags. A GraphQL error that comes back without data is a failed poll, never an empty list.
 
 At startup and hourly: `viewer { login }` and my team memberships, to name the team a request went to.
 
-Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: a poll of 24 PRs costs 4 to 5 points and takes about 15s, so about 300 points an hour at the 60s default, from the 5,000 an hour the token shares with everything else using it. Detail goes 10 PRs a request: 20 took about 7s and drew intermittent 502s from GitHub's query time limit. Each request times out at 30s, a whole poll at 2 minutes. `mergeStateStatus` needs no preview header.
+Every query selects `rateLimit { cost remaining limit resetAt }`, and both views show the remaining budget. Measured on 23 September: a poll of 24 PRs costs 4 to 5 points and takes about 15s, so about 300 points an hour at the 60s default, from the 5,000 an hour the token shares with everything else using it. Detail goes 10 PRs a request: 20 took about 7s and drew intermittent 502s from GitHub's query time limit. Each request times out at 30s, a whole poll at 2 minutes. `mergeStateStatus` needs no preview header. Issue detail is lighter: measured on 24 September, 25 issues a request took 1.5s for 1 point and 50 took 4.4s for 2. With 102 open issues involving me beside 22 PRs, a poll costs about 10 points and takes about 25s, so about 600 points an hour at the 1m default.
 
 ### Errors
 

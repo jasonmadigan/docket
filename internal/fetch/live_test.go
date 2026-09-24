@@ -49,8 +49,14 @@ func TestLive(t *testing.T) {
 			t.Errorf("incomplete PR: %+v", pr)
 		}
 	}
+	t.Logf("%d issues", len(res.Issues))
+	for _, is := range res.Issues {
+		if is.ID == "" || is.Repo == "" || is.URL == "" || len(is.Tags) == 0 || is.CreatedAt.IsZero() {
+			t.Errorf("incomplete issue: %+v", is)
+		}
+	}
 	var out bytes.Buffer
-	snap := model.Build(res.PRs, nil, model.Params{Login: v.Login, Teams: v.Teams, Now: time.Now()})
+	snap := model.Build(res.PRs, res.Issues, model.Params{Login: v.Login, Teams: v.Teams, Now: time.Now()})
 	if err := dump.Text(&out, snap); err != nil {
 		t.Fatal(err)
 	}

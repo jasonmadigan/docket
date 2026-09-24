@@ -55,7 +55,8 @@
         {"__typename": "PullRequestReview", "author": {"__typename": "User", "login": "me"}, "submittedAt": null, "state": "PENDING"},
         {"__typename": "HeadRefForcePushedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-03T09:30:00Z"},
         {"__typename": "MentionedEvent", "actor": {"__typename": "User", "login": "me"}, "createdAt": "2026-09-03T10:00:00Z"},
-        {"__typename": "IssueComment", "author": null, "createdAt": "2026-09-03T10:00:00Z"}
+        {"__typename": "IssueComment", "author": null, "createdAt": "2026-09-03T10:00:00Z"},
+        {"__typename": "ReopenedEvent", "actor": {"__typename": "User", "login": "alice"}, "createdAt": "2026-09-03T11:00:00Z"}
       ]}
     },
     null

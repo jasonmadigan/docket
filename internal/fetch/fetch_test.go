@@ -59,7 +59,8 @@ func (f *fake) finished() {
 const (
 	matchDiscovery = "author: search("
 	matchPage      = "search(query: $q"
-	matchDetail    = "nodes(ids: $ids)"
+	matchDetail    = "headRefOid"
+	matchIssues    = "subIssuesSummary"
 	budget         = `"rateLimit": {"cost": 1, "remaining": 4990, "limit": 5000, "resetAt": "2026-09-23T13:00:00Z"}`
 	detailBudget   = `"rateLimit": {"cost": 2, "remaining": 4988, "limit": 5000, "resetAt": "2026-09-23T13:00:00Z"}`
 )
@@ -176,7 +177,7 @@ func TestFetchBatchesDetail(t *testing.T) {
 		{match: matchDetail, data: details(minimal("PR_C"))},
 	}}
 	fetcher := New(f)
-	fetcher.batch = 2
+	fetcher.prBatch = 2
 	res, err := fetcher.Fetch(context.Background(), "me", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -335,23 +336,134 @@ func TestFetchDetailsTenAtATime(t *testing.T) {
 
 func TestFetchReportsProgress(t *testing.T) {
 	f := &fake{t: t, replies: []reply{
-		{match: matchDiscovery, data: discovery(map[string]string{"author": found("PR_A", "PR_B", "PR_C")})},
+		{match: matchDiscovery, data: discovery(map[string]string{
+			"author":      found("PR_A", "PR_B", "PR_C"),
+			"issueAuthor": found("I_A"),
+		})},
 		{match: matchDetail, data: details(minimal("PR_A"), minimal("PR_B"))},
 		{match: matchDetail, data: details(minimal("PR_C"))},
+		{match: matchIssues, data: details(minimalIssue("I_A"))},
 	}}
 	fetcher := New(f)
-	fetcher.batch = 2
+	fetcher.prBatch = 2
 	var got []Progress
 	if _, err := fetcher.Fetch(context.Background(), "me", func(p Progress) { got = append(got, p) }); err != nil {
 		t.Fatal(err)
 	}
 	want := []Progress{
-		{Phase: "finding PRs"},
-		{Phase: "details", Total: 3},
-		{Phase: "details", Done: 2, Total: 3},
-		{Phase: "details", Done: 3, Total: 3},
+		{Phase: "finding PRs and issues"},
+		{Phase: "details", Total: 4},
+		{Phase: "details", Done: 2, Total: 4},
+		{Phase: "details", Done: 3, Total: 4},
+		{Phase: "details", Done: 4, Total: 4},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("progress = %+v, want %+v", got, want)
+	}
+}
+
+func minimalIssue(id string) string {
+	return fmt.Sprintf(`{"id": %q, "number": 1, "state": "OPEN", "title": "t", "url": "https://github.com/acme/a/issues/1", `+
+		`"createdAt": "2026-09-01T09:00:00Z", "repository": {"nameWithOwner": "acme/a"}}`, id)
+}
+
+func issueTagsByID(issues []model.Issue) map[string][]model.Tag {
+	out := map[string][]model.Tag{}
+	for _, is := range issues {
+		out[is.ID] = is.Tags
+	}
+	return out
+}
+
+func TestFetchFindsIssuesApartFromPRs(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{
+			"author":         found("PR_A"),
+			"issueAuthor":    found("I_A"),
+			"issueAssigned":  found("I_A", "I_B"),
+			"issueMentioned": found("I_C"),
+			"issueCommented": found("I_C"),
+		})},
+		{match: matchDetail, data: details(minimal("PR_A"))},
+		{match: matchIssues, data: details(minimalIssue("I_A"), minimalIssue("I_B"), minimalIssue("I_C"))},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if got := tagsByID(res.PRs); !reflect.DeepEqual(got, map[string][]model.Tag{"PR_A": {model.TagAuthor}}) {
+		t.Fatalf("pr tags = %v", got)
+	}
+	want := map[string][]model.Tag{
+		"I_A": {model.TagAuthor, model.TagAssigned},
+		"I_B": {model.TagAssigned},
+		"I_C": {model.TagMentioned, model.TagCommented},
+	}
+	if got := issueTagsByID(res.Issues); !reflect.DeepEqual(got, want) {
+		t.Fatalf("issue tags = %v, want %v", got, want)
+	}
+	vars := f.calls[2].vars
+	if !reflect.DeepEqual(vars["ids"], []string{"I_A", "I_B", "I_C"}) {
+		t.Fatalf("issue detail vars = %v", vars)
+	}
+	if _, ok := vars["login"]; ok {
+		t.Fatal("issue detail takes no login")
+	}
+}
+
+func TestIssuePagesKeepTheIssueScope(t *testing.T) {
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{
+			"issueCommented": `{"pageInfo": {"hasNextPage": true, "endCursor": "CUR1"}, "nodes": [{"id": "I_A"}]}`,
+		})},
+		{match: matchPage, data: "{" + budget + `, "search": ` + found("I_B") + "}"},
+		{match: matchIssues, data: details(minimalIssue("I_A"), minimalIssue("I_B"))},
+	}}
+	if _, err := New(f).Fetch(context.Background(), "me", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if q := f.calls[1].vars["q"]; q != "is:issue is:open archived:false commenter:@me" {
+		t.Fatalf("page query = %v", q)
+	}
+}
+
+// measured live on 24 September 2026: 25 issues a request took 1.5s for a
+// point, 50 took 4.4s for two.
+func TestFetchDetailsIssuesTwentyFiveAtATime(t *testing.T) {
+	ids := make([]string, 30)
+	nodes := make([]string, 30)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("I_%02d", i)
+		nodes[i] = minimalIssue(ids[i])
+	}
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"issueAuthor": found(ids...)})},
+		{match: matchIssues, data: details(nodes[:25]...)},
+		{match: matchIssues, data: details(nodes[25:]...)},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.finished()
+	if len(res.Issues) != 30 {
+		t.Fatalf("got %d issues", len(res.Issues))
+	}
+}
+
+func TestFetchDropsIssuesClosedSinceSearchIndexed(t *testing.T) {
+	closed := strings.Replace(minimalIssue("I_B"), `"state": "OPEN"`, `"state": "CLOSED"`, 1)
+	f := &fake{t: t, replies: []reply{
+		{match: matchDiscovery, data: discovery(map[string]string{"issueAuthor": found("I_A", "I_B")})},
+		{match: matchIssues, data: details(minimalIssue("I_A"), closed)},
+	}}
+	res, err := New(f).Fetch(context.Background(), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Issues) != 1 || res.Issues[0].ID != "I_A" {
+		t.Fatalf("issues = %+v, want only the open one", res.Issues)
 	}
 }

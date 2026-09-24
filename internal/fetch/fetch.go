@@ -20,14 +20,16 @@ type Transport interface {
 }
 
 type Fetcher struct {
-	t     Transport
-	batch int
+	t          Transport
+	prBatch    int
+	issueBatch int
 }
 
 // New batches detail ten prs a request: twenty took about 7s live and drew
-// intermittent 502s from github's query time limit.
+// intermittent 502s from github's query time limit. Issues are lighter: 25
+// took 1.5s for a point, 50 took 4.4s for two.
 func New(t Transport) *Fetcher {
-	return &Fetcher{t: t, batch: 10}
+	return &Fetcher{t: t, prBatch: 10, issueBatch: 25}
 }
 
 type Viewer struct {
@@ -41,7 +43,8 @@ type Meta struct {
 }
 
 type Result struct {
-	PRs []model.PR
+	PRs    []model.PR
+	Issues []model.Issue
 	Meta
 }
 
@@ -50,6 +53,17 @@ type Progress struct {
 	Phase string `json:"phase"`
 	Done  int    `json:"done,omitempty"`
 	Total int    `json:"total,omitempty"`
+}
+
+// counter reports detail done across both kinds.
+type counter struct {
+	done, total int
+	report      func(Progress)
+}
+
+func (c *counter) add(n int) {
+	c.done += n
+	c.report(Progress{Phase: "details", Done: c.done, Total: c.total})
 }
 
 func (m *Meta) saw(b gh.Budget) {
@@ -128,26 +142,31 @@ func (f *Fetcher) Fetch(ctx context.Context, login string, progress func(Progres
 		progress = func(Progress) {}
 	}
 	var res Result
-	progress(Progress{Phase: "finding PRs"})
-	tags, err := f.discover(ctx, &res.Meta)
+	progress(Progress{Phase: "finding PRs and issues"})
+	prTags, issueTags, err := f.discover(ctx, &res.Meta)
 	if err != nil {
 		return Result{}, fmt.Errorf("discovery: %w", err)
 	}
-	if res.PRs, err = f.details(ctx, tags, login, &res.Meta, progress); err != nil {
+	c := &counter{total: len(prTags) + len(issueTags), report: progress}
+	progress(Progress{Phase: "details", Total: c.total})
+	if res.PRs, err = f.prDetails(ctx, prTags, login, &res.Meta, c); err != nil {
 		return Result{}, fmt.Errorf("details: %w", err)
+	}
+	if res.Issues, err = f.issueDetails(ctx, issueTags, &res.Meta, c); err != nil {
+		return Result{}, fmt.Errorf("issue details: %w", err)
 	}
 	return res, nil
 }
 
-func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.Tag, error) {
+func (f *Fetcher) discover(ctx context.Context, meta *Meta) (prs, issues map[string][]model.Tag, err error) {
 	var resp map[string]json.RawMessage
 	if err := f.do(ctx, discoveryQuery, nil, &resp, meta); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var budget gh.Budget
 	if raw, ok := resp["rateLimit"]; ok {
 		if err := json.Unmarshal(raw, &budget); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	meta.saw(budget)
@@ -155,11 +174,11 @@ func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.
 	for _, q := range qualifiers {
 		raw, ok := resp[q.alias]
 		if !ok || string(raw) == "null" {
-			return nil, fmt.Errorf("%s: missing from the response", q.alias)
+			return nil, nil, fmt.Errorf("%s: missing from the response", q.alias)
 		}
 		var sr searchResult
 		if err := json.Unmarshal(raw, &sr); err != nil {
-			return nil, fmt.Errorf("%s: %w", q.alias, err)
+			return nil, nil, fmt.Errorf("%s: %w", q.alias, err)
 		}
 		ids := map[string]bool{}
 		for page := 1; ; page++ {
@@ -172,14 +191,18 @@ func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.
 				break
 			}
 			var err error
-			if sr, err = f.page(ctx, scope+q.query, sr.PageInfo.EndCursor, meta); err != nil {
-				return nil, fmt.Errorf("%s: %w", q.alias, err)
+			if sr, err = f.page(ctx, q.search(), sr.PageInfo.EndCursor, meta); err != nil {
+				return nil, nil, fmt.Errorf("%s: %w", q.alias, err)
 			}
 		}
 		found[q.alias] = ids
 	}
-	tags := map[string][]model.Tag{}
+	prs, issues = map[string][]model.Tag{}, map[string][]model.Tag{}
 	for _, q := range qualifiers {
+		tags := prs
+		if q.issue {
+			tags = issues
+		}
 		for id := range found[q.alias] {
 			switch {
 			case q.tag != "":
@@ -189,7 +212,7 @@ func (f *Fetcher) discover(ctx context.Context, meta *Meta) (map[string][]model.
 			}
 		}
 	}
-	return tags, nil
+	return prs, issues, nil
 }
 
 func (f *Fetcher) page(ctx context.Context, query, after string, meta *Meta) (searchResult, error) {
@@ -207,16 +230,14 @@ func (f *Fetcher) page(ctx context.Context, query, after string, meta *Meta) (se
 	return *resp.Search, nil
 }
 
-func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta, progress func(Progress)) ([]model.PR, error) {
+func (f *Fetcher) prDetails(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta, c *counter) ([]model.PR, error) {
 	var prs []model.PR
-	done := 0
-	progress(Progress{Phase: "details", Total: len(tags)})
-	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.batch) {
+	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.prBatch) {
 		var resp struct {
 			RateLimit gh.Budget      `json:"rateLimit"`
 			Nodes     []*pullRequest `json:"nodes"`
 		}
-		if err := f.do(ctx, detailQuery, map[string]any{"ids": ids, "login": login}, &resp, meta); err != nil {
+		if err := f.do(ctx, prDetailQuery, map[string]any{"ids": ids, "login": login}, &resp, meta); err != nil {
 			return nil, err
 		}
 		if resp.Nodes == nil {
@@ -229,8 +250,32 @@ func (f *Fetcher) details(ctx context.Context, tags map[string][]model.Tag, logi
 				prs = append(prs, n.model(tags[n.ID]))
 			}
 		}
-		done += len(ids)
-		progress(Progress{Phase: "details", Done: done, Total: len(tags)})
+		c.add(len(ids))
 	}
 	return prs, nil
+}
+
+func (f *Fetcher) issueDetails(ctx context.Context, tags map[string][]model.Tag, meta *Meta, c *counter) ([]model.Issue, error) {
+	var issues []model.Issue
+	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.issueBatch) {
+		var resp struct {
+			RateLimit gh.Budget `json:"rateLimit"`
+			Nodes     []*issue  `json:"nodes"`
+		}
+		if err := f.do(ctx, issueDetailQuery, map[string]any{"ids": ids}, &resp, meta); err != nil {
+			return nil, err
+		}
+		if resp.Nodes == nil {
+			return nil, errors.New("nodes missing from the response")
+		}
+		meta.saw(resp.RateLimit)
+		for _, n := range resp.Nodes {
+			// search lags, so an issue closed a moment ago can still be listed
+			if n != nil && n.ID != "" && n.State == "OPEN" {
+				issues = append(issues, n.model(tags[n.ID]))
+			}
+		}
+		c.add(len(ids))
+	}
+	return issues, nil
 }

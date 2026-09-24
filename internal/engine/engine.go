@@ -201,7 +201,7 @@ func (e *Engine) poll(ctx context.Context, now time.Time, st *State) error {
 	}
 	keepBudget(st, res.Budget)
 	_, ignore := e.settings()
-	st.Snapshot = model.Build(res.PRs, nil, model.Params{
+	st.Snapshot = model.Build(res.PRs, res.Issues, model.Params{
 		Login: e.viewer.Login, Teams: e.viewer.Teams, Ignore: ignore, Now: now,
 	})
 	st.Changed = e.changed(st.Snapshot)
