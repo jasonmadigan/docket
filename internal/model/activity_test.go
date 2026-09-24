@@ -33,6 +33,10 @@ func TestLastHumanActivity(t *testing.T) {
 			Author: user("alice"), CreatedAt: at(0),
 			Timeline: []Event{{Kind: EventForcePush, Actor: user("alice"), At: at(4)}},
 		}}, at(4)},
+		{"reopening", PR{Item: Item{
+			Author: user("alice"), CreatedAt: at(0),
+			Timeline: []Event{{Kind: EventReopened, Actor: user("bob"), At: at(6)}},
+		}}, at(6)},
 		{"only bots", PR{
 			Item:    Item{Author: bot("renovate"), CreatedAt: at(0)},
 			Commits: []Commit{{OID: "c1", At: at(1), Author: bot("renovate")}},

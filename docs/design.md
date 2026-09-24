@@ -84,7 +84,44 @@ Then my side. The review lines only arise on PRs I didn't open; replies count fr
 
 ### Human activity
 
-The latest opening, commit (committer date), force push, comment, review, review comment or review request by an actor that is neither a GitHub App (`Bot`, or a login ending `[bot]`) nor listed in `ignore_actors`. Label edits, CI runs and bot comments don't count, which rules out `updatedAt`.
+The latest opening, commit (committer date), force push, comment, review, review comment, review request or reopening by an actor that is neither a GitHub App (`Bot`, or a login ending `[bot]`) nor listed in `ignore_actors`. Label edits, CI runs and bot comments don't count, which rules out `updatedAt`.
+
+## Per issue
+
+Row: `owner/repo#n`, title, author when not me, tags, the state of its linked PRs, age of last human activity.
+
+Detail: what's left, my side, assignees, labels, linked PRs.
+
+Linked PRs come from `closedByPullRequestsReferences`, closed ones included so a merged fix shows; one closed without merging no longer bears on the issue and is dropped. The glyph is `●` while a linked PR is open or draft, `✓` once one has merged and none is open, `○` with none.
+
+### What's left
+
+What stands before it can close, every line that applies, in this order.
+
+| Condition | Shown |
+|-|-|
+| linked PR merged | PR o/r#n merged |
+| linked PR open | PR o/r#n open |
+| linked PR draft | PR o/r#n draft |
+| sub-issues, some not completed | 3 of 7 sub-issues completed |
+| sub-issues, all completed | all 7 sub-issues completed |
+| no assignees | unassigned |
+
+`draft` and `unassigned` are grey notes. "Completed" is GitHub's `subIssuesSummary.completed`.
+
+Then my side. Replies count from my last comment, or from opening it when it's mine, with the same floor as for PRs.
+
+| Condition | Shown |
+|-|-|
+| assigned to me | assigned to you Nd ago |
+| mentioned, nothing from me since | mentioned by X Nd ago |
+| others commented after my last comment | N replies since yours |
+
+The assignment's age goes once its event leaves the timeline window. The mentioner is found as for PRs.
+
+### Human activity
+
+The latest opening, comment, assignment, cross-reference or reopening by a person, by the same rule as PRs.
 
 ## Architecture
 

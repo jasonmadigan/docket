@@ -29,7 +29,10 @@ const (
 	EventReview          EventKind = "review"
 	EventForcePush       EventKind = "force_push"
 	EventReviewRequested EventKind = "review_requested"
-	EventMentioned       EventKind = "mentioned" // actor is the person mentioned, not the author
+	EventMentioned       EventKind = "mentioned"  // actor is the person mentioned, not the author
+	EventAssigned        EventKind = "assigned"   // target is the assignee
+	EventReferenced      EventKind = "referenced" // another issue or pr mentioned this one
+	EventReopened        EventKind = "reopened"
 )
 
 type Event struct {
@@ -112,4 +115,42 @@ type PR struct {
 	CommitCount       int        `json:"commitCount"`
 	Commits           []Commit   `json:"-"` // last 100, oldest first
 	Issues            []IssueRef `json:"issues,omitempty"`
+}
+
+// PRRef is a pull request that says it closes an issue.
+type PRRef struct {
+	Repo   string `json:"repo"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+	State  string `json:"state"` // OPEN or MERGED; ones closed unmerged are dropped
+	Draft  bool   `json:"draft,omitempty"`
+}
+
+func (r PRRef) Ref() string {
+	return fmt.Sprintf("%s#%d", r.Repo, r.Number)
+}
+
+// Status is merged, draft or open.
+func (r PRRef) Status() string {
+	switch {
+	case r.State == "MERGED":
+		return "merged"
+	case r.Draft:
+		return "draft"
+	}
+	return "open"
+}
+
+type SubIssues struct {
+	Total     int `json:"total"`
+	Completed int `json:"completed"`
+}
+
+type Issue struct {
+	Item
+	Assignees []Actor   `json:"assignees,omitempty"`
+	Labels    []string  `json:"labels,omitempty"`
+	SubIssues SubIssues `json:"subIssues,omitzero"`
+	PRs       []PRRef   `json:"prs,omitempty"`
 }

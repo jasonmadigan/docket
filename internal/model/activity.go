@@ -50,7 +50,7 @@ func latest(it Item, commits []Commit, who func(Actor) bool, kinds ...EventKind)
 }
 
 func lastHumanActivity(pr PR, p people) time.Time {
-	return latest(pr.Item, pr.Commits, p.human, EventComment, EventReview, EventForcePush, EventReviewRequested)
+	return latest(pr.Item, pr.Commits, p.human, EventComment, EventReview, EventForcePush, EventReviewRequested, EventReopened)
 }
 
 func myLastActivity(pr PR, p people) time.Time {
