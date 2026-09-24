@@ -230,21 +230,31 @@ func (f *Fetcher) page(ctx context.Context, query, after string, meta *Meta) (se
 	return *resp.Search, nil
 }
 
+// batch fetches one batch of detail through query. A response without
+// nodes fails, since it would read as everything having closed.
+func batch[N any](ctx context.Context, f *Fetcher, query string, vars map[string]any, meta *Meta) ([]*N, error) {
+	var resp struct {
+		RateLimit gh.Budget `json:"rateLimit"`
+		Nodes     []*N      `json:"nodes"`
+	}
+	if err := f.do(ctx, query, vars, &resp, meta); err != nil {
+		return nil, err
+	}
+	if resp.Nodes == nil {
+		return nil, errors.New("nodes missing from the response")
+	}
+	meta.saw(resp.RateLimit)
+	return resp.Nodes, nil
+}
+
 func (f *Fetcher) prDetails(ctx context.Context, tags map[string][]model.Tag, login string, meta *Meta, c *counter) ([]model.PR, error) {
 	var prs []model.PR
 	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.prBatch) {
-		var resp struct {
-			RateLimit gh.Budget      `json:"rateLimit"`
-			Nodes     []*pullRequest `json:"nodes"`
-		}
-		if err := f.do(ctx, prDetailQuery, map[string]any{"ids": ids, "login": login}, &resp, meta); err != nil {
+		nodes, err := batch[pullRequest](ctx, f, prDetailQuery, map[string]any{"ids": ids, "login": login}, meta)
+		if err != nil {
 			return nil, err
 		}
-		if resp.Nodes == nil {
-			return nil, errors.New("nodes missing from the response")
-		}
-		meta.saw(resp.RateLimit)
-		for _, n := range resp.Nodes {
+		for _, n := range nodes {
 			// search lags, so a pr merged a moment ago can still be listed
 			if n != nil && n.ID != "" && n.State == "OPEN" {
 				prs = append(prs, n.model(tags[n.ID]))
@@ -258,18 +268,11 @@ func (f *Fetcher) prDetails(ctx context.Context, tags map[string][]model.Tag, lo
 func (f *Fetcher) issueDetails(ctx context.Context, tags map[string][]model.Tag, meta *Meta, c *counter) ([]model.Issue, error) {
 	var issues []model.Issue
 	for ids := range slices.Chunk(slices.Sorted(maps.Keys(tags)), f.issueBatch) {
-		var resp struct {
-			RateLimit gh.Budget `json:"rateLimit"`
-			Nodes     []*issue  `json:"nodes"`
-		}
-		if err := f.do(ctx, issueDetailQuery, map[string]any{"ids": ids}, &resp, meta); err != nil {
+		nodes, err := batch[issue](ctx, f, issueDetailQuery, map[string]any{"ids": ids}, meta)
+		if err != nil {
 			return nil, err
 		}
-		if resp.Nodes == nil {
-			return nil, errors.New("nodes missing from the response")
-		}
-		meta.saw(resp.RateLimit)
-		for _, n := range resp.Nodes {
+		for _, n := range nodes {
 			// search lags, so an issue closed a moment ago can still be listed
 			if n != nil && n.ID != "" && n.State == "OPEN" {
 				issues = append(issues, n.model(tags[n.ID]))
