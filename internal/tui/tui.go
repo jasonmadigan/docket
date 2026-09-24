@@ -31,10 +31,17 @@ type Settings interface {
 	Path() string
 }
 
+// Archiver hides items locally; archive.Store in practice.
+type Archiver interface {
+	Archive(id, ref, title string) error
+	Unarchive(id string) error
+}
+
 type Options struct {
 	Open     func(urls ...string) tea.Cmd // defaults to the browser, or the clipboard over ssh
 	Location *time.Location
 	Settings Settings // nil hides the settings
+	Archive  Archiver // nil hides archiving
 }
 
 type (
@@ -45,10 +52,11 @@ type (
 const (
 	tabPRs = iota
 	tabIssues
+	tabArchived
 	tabCount
 )
 
-var tabNames = [tabCount]string{"PRs", "Issues"}
+var tabNames = [tabCount]string{"PRs", "Issues", "Archived"}
 
 // place is where a tab was left while another shows.
 type place struct {
@@ -87,16 +95,18 @@ type Model struct {
 	changed map[string]bool
 	seen    time.Time // the poll changed was last filled from
 
-	settings  Settings
-	editing   bool // the settings panel is open
-	draftPoll time.Duration
-	ignore    textinput.Model
-	focus     int // 0 interval, 1 accounts, 2 save, 3 cancel
-	formErr   string
+	settings        Settings
+	archive         Archiver
+	undoID, undoRef string // the last archive, for u
+	editing         bool   // the settings panel is open
+	draftPoll       time.Duration
+	ignore          textinput.Model
+	focus           int // 0 interval, 1 accounts, 2 save, 3 cancel
+	formErr         string
 }
 
-func Run(ctx context.Context, eng Engine, settings Settings) error {
-	m, unsubscribe := New(eng, Options{Settings: settings})
+func Run(ctx context.Context, eng Engine, opts Options) error {
+	m, unsubscribe := New(eng, opts)
 	defer unsubscribe()
 	_, err := tea.NewProgram(m, tea.WithContext(ctx)).Run()
 	if ctx.Err() != nil {
@@ -121,6 +131,7 @@ func New(eng Engine, opts Options) (Model, func()) {
 	ignore.Placeholder = "none"
 	return Model{
 		settings: opts.Settings,
+		archive:  opts.Archive,
 		ignore:   ignore,
 		states:   states,
 		refresh:  eng.Refresh,
@@ -170,8 +181,11 @@ func flash(text string) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case stateMsg:
+		was := m.state
 		m.state = engine.State(msg)
-		if !m.state.Busy {
+		// a finished poll clears the flash; an archive rebuild keeps the
+		// poll's time and leaves it
+		if !m.state.Busy && (was.Busy || !m.state.Updated.Equal(was.Updated)) {
 			m.flash = ""
 		}
 		if s := m.state; s.Loaded && !s.Busy && !s.Updated.Equal(m.seen) {
@@ -309,6 +323,39 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			urls[i] = pr.URL
 		}
 		return m, m.open(urls...)
+	case "a":
+		if m.archive == nil || row == nil {
+			break
+		}
+		it := row.Item()
+		if m.tab == tabArchived {
+			if err := m.archive.Unarchive(it.ID); err != nil {
+				m.flash = "unarchive failed: " + err.Error()
+				break
+			}
+			m.flash = "unarchived " + it.Ref()
+			break
+		}
+		if err := m.archive.Archive(it.ID, it.Ref(), it.Title); err != nil {
+			m.flash = "archive failed: " + err.Error()
+			break
+		}
+		m.undoID, m.undoRef = it.ID, it.Ref()
+		m.flash = "archived " + it.Ref() + " · u undo"
+	case "u":
+		if m.archive == nil {
+			break
+		}
+		if m.undoID == "" {
+			m.flash = "nothing to undo"
+			break
+		}
+		if err := m.archive.Unarchive(m.undoID); err != nil {
+			m.flash = "undo failed: " + err.Error()
+			break
+		}
+		m.flash = "unarchived " + m.undoRef
+		m.undoID, m.undoRef = "", ""
 	}
 	return m, nil
 }
@@ -416,6 +463,8 @@ func (m Model) listOf(t int) model.List {
 	switch t {
 	case tabIssues:
 		return m.state.Snapshot.Issues
+	case tabArchived:
+		return m.state.Snapshot.Archived
 	}
 	return m.state.Snapshot.PRs
 }

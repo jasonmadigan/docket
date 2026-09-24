@@ -49,6 +49,12 @@ func (s *settings) Set(c config.Config) error {
 
 func (s *settings) Path() string { return "~/.config/docket/config.toml" }
 
+// shelf archives nothing: the demo state never changes.
+type shelf struct{}
+
+func (shelf) Archive(string, string, string) error { return nil }
+func (shelf) Unarchive(string) error               { return nil }
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "screenshots:", err)
@@ -83,7 +89,7 @@ func run(args []string) error {
 
 // frame drives the real model: size it, let it take the state, press keys.
 func frame(st engine.State, prefs *settings, w, h int, keys []string) string {
-	m, _ := tui.New(still{st}, tui.Options{Location: time.UTC, Settings: prefs})
+	m, _ := tui.New(still{st}, tui.Options{Location: time.UTC, Settings: prefs, Archive: shelf{}})
 	var model tea.Model = m
 	model, _ = model.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, msg := range drain(m.Init()) {

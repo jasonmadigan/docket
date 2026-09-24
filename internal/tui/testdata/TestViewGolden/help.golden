@@ -1,4 +1,4 @@
- docket  me · PRs 5 │ Issues 3                              ✗ updated 12:00 · retry 12:02
+ docket  me · PRs 5 │ Issues 3 │ Archived 1                 ✗ updated 12:00 · retry 12:02
   Keys
   j k ↑ ↓   move
   tab       next tab; shift+tab goes back
@@ -6,6 +6,8 @@
   c         open first failing check
   i         open linked issues
   p         open linked PRs
+  a         archive; on Archived, unarchive
+  u         undo the last archive
   r         refresh now
   s         settings
   /         filter; esc clears
@@ -14,7 +16,5 @@
 
   Warnings
   Resource protected by organization SAML enforcement.
-
-
 
 fetch failed: Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no …

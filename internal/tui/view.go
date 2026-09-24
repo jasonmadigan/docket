@@ -26,6 +26,8 @@ var keyHelp = [][2]string{
 	{"c", "open first failing check"},
 	{"i", "open linked issues"},
 	{"p", "open linked PRs"},
+	{"a", "archive; on Archived, unarchive"},
+	{"u", "undo the last archive"},
 	{"r", "refresh now"},
 	{"s", "settings"},
 	{"/", "filter; esc clears"},
@@ -262,9 +264,18 @@ func (m Model) hints() string {
 	var parts []string
 	switch m.tab {
 	case tabIssues:
-		parts = []string{"tab PRs", "j/k move", "enter open", "p PRs"}
+		parts = []string{"tab archived", "j/k move", "enter open", "p PRs"}
+	case tabArchived:
+		parts = []string{"tab PRs", "j/k move", "enter open"}
 	default:
 		parts = []string{"tab issues", "j/k move", "enter open", "c check", "i issues"}
+	}
+	if m.archive != nil {
+		if m.tab == tabArchived {
+			parts = append(parts, "a unarchive")
+		} else {
+			parts = append(parts, "a archive")
+		}
 	}
 	parts = append(parts, "/ filter", "r refresh")
 	if m.settings != nil {
@@ -273,7 +284,7 @@ func (m Model) hints() string {
 	return strings.Join(append(parts, "? help"), " · ")
 }
 
-var empty = [tabCount]string{"no open PRs involve you", "no open issues involve you"}
+var empty = [tabCount]string{"no open PRs involve you", "no open issues involve you", "nothing archived"}
 
 func (m Model) list(l layout) string {
 	var lines []string

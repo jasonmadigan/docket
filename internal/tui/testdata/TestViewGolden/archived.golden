@@ -1,15 +1,15 @@
- docket  me · PRs 5 │ Issues 3 │ Archived 1   Mine 2  Requested 2  Mentioned 1                               ⠋ pulling data · details 10/24
-   Mine 2  ───────────────────────────────────────────────────────────────────────── ╭─ acme/widgets#51 ───────────────────────────────────╮
-▌ ✓   5w acme/widgets#51   Add rate limit docs       approved       author           │ Add rate limit docs                                 │
-  ✗   2d acme/widgets#42   Fix reconcile loop when … changes        author           │ github.com/acme/widgets/pull/51                     │
-   Requested 2  ──────────────────────────────────────────────────────────────────── │ opened 5w ago · touched 5w ago                      │
-  ✓   9d acme/gateway#1188 Bump Envoy to 1.37        review   bob   team             │ author                                              │
-  ●   1d acme/gateway#1203 Support weighted backends review   alice review,commented │                                                     │
-   Mentioned 1  ──────────────────────────────────────────────────────────────────── │ What's left                                         │
-  ·   1y acme/docs#88      Rewrite the getting star…          erin  mentioned        │   ✓ ready to merge                                  │
+ docket  me · PRs 5 │ Issues 3 │ Archived 1   Issues 1                                                           updated 12:00 · next 12:01
+   Issues 1  ─────────────────────────────────────────────────────────────────────── ╭─ acme/widgets#3 ────────────────────────────────────╮
+▌ ○   1y acme/widgets#3 Support arm64 builds                         frank commented │ Support arm64 builds                                │
+                                                                                     │ github.com/acme/widgets/issues/3                    │
+                                                                                     │ by frank · opened 1y ago · touched 1y ago · archive │
+                                                                                     │ commented                                           │
                                                                                      │                                                     │
-                                                                                     │ Reviewers                                           │
-                                                                                     │   dave approved                                     │
+                                                                                     │ Assignees                                           │
+                                                                                     │   frank                                             │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
+                                                                                     │                                                     │
                                                                                      │                                                     │
                                                                                      │                                                     │
                                                                                      │                                                     │
@@ -27,4 +27,4 @@
                                                                                      │                                                     │
                                                                                      │                                                     │
                                                                                      ╰─────────────────────────────────────────────────────╯
-tab issues · j/k move · enter open · c check · i issues · / filter · r refresh · ? help                                     budget 4812/5000
+tab PRs · j/k move · enter open · / filter · r refresh · ? help                                                             budget 4812/5000

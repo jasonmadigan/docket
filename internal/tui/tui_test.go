@@ -139,6 +139,7 @@ func TestViewGolden(t *testing.T) {
 		{"busy", busyFixture(), 140, 30, nil},
 		{"issues", fixture.State(), 140, 30, []string{"tab"}},
 		{"issues narrow", fixture.State(), 90, 32, []string{"tab"}},
+		{"archived", fixture.State(), 140, 30, []string{"tab", "tab"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -356,9 +357,15 @@ func TestErrorKeepsLastSuccess(t *testing.T) {
 	}
 }
 
-func TestFlashClearsOnNewState(t *testing.T) {
+func TestFlashClearsWhenAPollFinishes(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	hs.press("r")
+	busy := fixture.State()
+	busy.Busy = true
+	hs.send(stateMsg(busy))
+	if got := lastLine(hs.screen()); !strings.Contains(got, "refreshing") {
+		t.Fatalf("status while polling = %q", got)
+	}
 	hs.send(stateMsg(fixture.State()))
 	if got := lastLine(hs.screen()); strings.Contains(got, "refreshing") || !strings.HasPrefix(got, "tab issues · j/k move") {
 		t.Fatalf("status = %q", got)
@@ -399,7 +406,7 @@ func TestEmojiRowsMatchTheRenderer(t *testing.T) {
 func TestHeaderShowsCountsAndActivity(t *testing.T) {
 	hs := newHarness(t, fixture.State(), 140, 30)
 	got := firstLine(hs.screen())
-	for _, want := range []string{" docket ", "me · PRs 5 │ Issues 3", "Mine 2", "Requested 2", "Mentioned 1", "updated 12:00 · next 12:01"} {
+	for _, want := range []string{" docket ", "me · PRs 5 │ Issues 3", "Archived 1", "Mine 2", "Requested 2", "Mentioned 1", "updated 12:00 · next 12:01"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("header lacks %q: %q", want, got)
 		}
@@ -497,18 +504,21 @@ func TestTabSwitchesBetweenLists(t *testing.T) {
 	if got := hs.selected(); got != "acme/gateway#1180" {
 		t.Fatalf("first issue = %q", got)
 	}
-	screen := hs.screen()
 	for _, want := range []string{"Mine 1", "Assigned 1", "Mentioned 1", "Document weighted backends"} {
-		if !strings.Contains(screen, want) {
+		if !strings.Contains(hs.screen(), want) {
 			t.Errorf("issues tab lacks %q", want)
 		}
+	}
+	hs.press("tab")
+	if got := hs.selected(); got != "acme/widgets#3" {
+		t.Fatalf("archived tab = %q", got)
 	}
 	hs.press("tab")
 	if got := hs.selected(); got != "acme/widgets#42" {
 		t.Fatalf("back on PRs, selected %q, want where it was left", got)
 	}
 	hs.press("shift+tab")
-	if got := hs.selected(); got != "acme/gateway#1180" {
+	if got := hs.selected(); got != "acme/widgets#3" {
 		t.Fatalf("shift+tab from PRs selected %q", got)
 	}
 }
@@ -584,7 +594,7 @@ func TestFilterAppliesToTheTabShowing(t *testing.T) {
 	if len(hs.m.rows) != 1 || hs.selected() != "acme/widgets#7" {
 		t.Fatalf("label filter: %d rows, selected %q", len(hs.m.rows), hs.selected())
 	}
-	hs.press("tab")
+	hs.press("shift+tab")
 	if !strings.Contains(hs.screen(), "no matches") {
 		t.Fatalf("PRs under the same filter:\n%s", hs.screen())
 	}

@@ -155,12 +155,26 @@ func Issues() []model.Issue {
 			PRs: []model.PRRef{{Repo: "acme/docs", Number: 91, Title: "Fix the install link",
 				URL: "https://github.com/acme/docs/pull/91", State: "MERGED"}},
 		},
+		{
+			Item: model.Item{
+				ID: "I_4", Repo: "acme/widgets", Number: 3, Title: "Support arm64 builds",
+				URL: "https://github.com/acme/widgets/issues/3", Author: user("frank"), CreatedAt: ago(400 * day),
+				Tags:     []model.Tag{model.TagCommented},
+				Timeline: []model.Event{{Kind: model.EventComment, Actor: user("me"), At: ago(390 * day)}},
+			},
+			Assignees: []model.Actor{user("frank")},
+		},
 	}
+}
+
+// Archive has one issue archived two days ago.
+func Archive() map[string]time.Time {
+	return map[string]time.Time{"I_4": ago(2 * day)}
 }
 
 func State() engine.State {
 	return engine.State{
-		Snapshot: model.Build(PRs(), Issues(), model.Params{Login: "me", Teams: []string{"acme/devs"}, Now: Now}),
+		Snapshot: model.Build(PRs(), Issues(), model.Params{Login: "me", Teams: []string{"acme/devs"}, Archive: Archive(), Now: Now}),
 		Loaded:   true,
 		Updated:  Now,
 		Next:     Now.Add(time.Minute),

@@ -47,6 +47,8 @@ docket dump         # print once and exit; --json for scripts
 | `c` | open its first failing check |
 | `i` | open its linked issues |
 | `p` | open an issue's linked PRs |
+| `a` | archive, or unarchive on the Archived tab |
+| `u` | undo the last archive |
 | `/` | filter by repo, title, author or tag; `esc` clears |
 | `r` | refresh now |
 | `s` | settings |

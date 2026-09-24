@@ -105,7 +105,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return web.Run(ctx, eng, web.Options{Addr: *addr, Open: *open, Log: stderr, Settings: store})
 		})
 	}
-	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng, store) })
+	return serve(ctx, eng, func(ctx context.Context) error { return tui.Run(ctx, eng, tui.Options{Settings: store}) })
 }
 
 func loadConfig(path string, poll time.Duration) (config.Config, error) {
