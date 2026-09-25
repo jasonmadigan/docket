@@ -8,7 +8,7 @@ Every open pull request and issue you're involved in, live in your terminal or a
 
 A PR is listed while it's open and you opened it, were asked to review it (directly or through a team), are assigned to it, were @-mentioned in it, reviewed it or commented on it. Nothing is hidden for being old: in each section the longest-neglected come first, so nothing quietly dies.
 
-An issue is listed while it's open and you opened it, are assigned to it, were @-mentioned in it or commented on it. PRs and issues each have a tab.
+An issue is listed while it's open and you opened it, are assigned to it, were @-mentioned in it or commented on it. PRs, issues and anything you've archived each have a tab.
 
 ![issues in the terminal](docs/img/tui-issues.png)
 
@@ -17,10 +17,10 @@ An issue is listed while it's open and you opened it, are assigned to it, were @
 - CI: passing, running, or failing and which checks.
 - What's left: conflicts, behind base, changes requested and by whom, reviewers still awaited, unresolved threads, or ready to merge.
 - Your side: a review asked of you or your team, commits pushed since your review, mentions you haven't answered, replies since your last comment.
-- Linked issues, and how long since a person, not a bot, last touched the PR.
+- Linked issues, and how long since a person, not a bot, last touched each PR or issue.
 - Issues: linked PRs and whether they've merged, sub-issue progress, who's assigned, labels, and mentions or replies waiting on you.
 
-It refreshes every minute. The header shows what it's doing while it does it, and `◆` marks PRs that changed since the last refresh until you've looked at them.
+It refreshes every minute. The header shows what it's doing while it does it, and `◆` marks anything that changed since the last refresh until you've looked at them.
 
 ## Install
 
@@ -43,21 +43,21 @@ docket dump         # print once and exit; --json for scripts
 | Key | |
 |-|-|
 | `j` `k`, arrows, wheel | move |
-| click | select |
-| `tab` | switch between PRs and issues |
+| click | select a row or tab |
+| `tab`, `shift+tab` | next or previous tab: PRs, issues, archived |
 | `enter` | open the PR or issue |
 | `c` | open its first failing check |
 | `i` | open its linked issues |
 | `p` | open an issue's linked PRs |
 | `a` | archive, or unarchive on the Archived tab |
 | `u` | undo the last archive |
-| `/` | filter by repo, title, author or tag; `esc` clears |
+| `/` | filter by repo, title, author, tag or label; `esc` clears |
 | `r` | refresh now |
 | `s` | settings |
 | `?` | help |
 | `q` | quit |
 
-PR refs, failing checks and linked issues are links you can click in terminals that support them, such as iTerm2. Over SSH, links are copied to your clipboard instead of opened.
+Refs, failing checks, linked issues and linked PRs are links you can click in terminals that support them, such as iTerm2. Over SSH, links are copied to your clipboard instead of opened.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/web-dark.png">
