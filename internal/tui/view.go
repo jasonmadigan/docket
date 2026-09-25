@@ -322,7 +322,7 @@ type columns struct {
 }
 
 // fitColumns drops author, review, age, ref and ci in that order until the
-// title gets minTitle, then squeezes tags. Review shows only beside PRs.
+// title gets minTitle, then squeezes tags. review shows only beside prs.
 func fitColumns(method ansi.Method, width int, rows []model.Row, snap model.Snapshot) columns {
 	c := columns{ci: 1, age: 4}
 	for _, r := range rows {

@@ -112,7 +112,7 @@ func PRs() []model.PR {
 	}
 }
 
-// Issues fills each issue section, with linked PRs and sub-issues.
+// Issues fills each issue section, with linked prs and sub-issues.
 func Issues() []model.Issue {
 	return []model.Issue{
 		{
