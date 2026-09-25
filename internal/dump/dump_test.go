@@ -70,3 +70,22 @@ func TestTextCountsArchivedItems(t *testing.T) {
 		t.Fatalf("output:\n%s", out)
 	}
 }
+
+func TestTextSkipsEmptyLists(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Text(&buf, model.Snapshot{}); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("an empty snapshot printed %q", buf.String())
+	}
+	snap := fixture.State().Snapshot
+	snap.PRs = model.List{}
+	buf.Reset()
+	if err := Text(&buf, snap); err != nil {
+		t.Fatal(err)
+	}
+	if out := ansi.Strip(buf.String()); strings.Contains(out, "Pull requests") || !strings.HasPrefix(out, "Issues\n") {
+		t.Fatalf("issues only:\n%s", out)
+	}
+}

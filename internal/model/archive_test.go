@@ -111,3 +111,11 @@ func TestArchivedJSON(t *testing.T) {
 		t.Fatalf("a live row carries archived: %s", got)
 	}
 }
+
+func TestUnfiledItemsStayOutOfTheArchive(t *testing.T) {
+	issues := []Issue{{Item: Item{ID: "i9", Repo: "acme/a", Number: 9, Author: user("bob"), CreatedAt: at(1)}}}
+	snap := Build(nil, issues, Params{Login: "me", Now: at(10), Archive: map[string]time.Time{"i9": at(5)}})
+	if snap.Issues.Count != 0 || snap.Archived.Count != 0 || len(snap.Void) != 0 {
+		t.Fatalf("an item matching no section was listed: %+v", snap)
+	}
+}

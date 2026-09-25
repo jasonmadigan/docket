@@ -155,8 +155,10 @@ func TestLoadingAndEmpty(t *testing.T) {
 		t.Fatalf("loading page:\n%s", body)
 	}
 	body = get(t, handler(t, newFake(engine.State{Loaded: true, Updated: fixture.Now})), "localhost", "/sections").Body.String()
-	if !strings.Contains(body, "No open PRs involve you.") {
-		t.Fatalf("empty page:\n%s", body)
+	for _, want := range []string{"No open PRs involve you.", "No open issues involve you.", "Nothing archived."} {
+		if !strings.Contains(body, want) {
+			t.Errorf("empty page lacks %q", want)
+		}
 	}
 }
 
